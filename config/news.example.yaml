@@ -1,0 +1,10 @@
+news:
+  provider: "newsapi"
+  time_window_hours: 72
+  max_articles_per_stock: 20
+  dedup_similarity_threshold: 0.85
+  cache_ttl_minutes: 60
+
+sentiment:
+  analyzer: "textblob"
+  min_text_length: 50

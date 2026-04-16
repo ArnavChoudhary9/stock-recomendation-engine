@@ -1,0 +1,26 @@
+features:
+  sma_periods: [20, 50, 200]
+  ema_periods: [12, 26]
+  rsi_period: 14
+  atr_period: 14
+  volatility_period: 20
+  momentum_periods: [5, 10, 20]
+  volume_avg_period: 20
+
+scoring:
+  weights:
+    moving_average: 0.25
+    momentum: 0.20
+    volume: 0.15
+    volatility: 0.10
+    fundamental: 0.20
+    support_resistance: 0.10
+
+signals:
+  rsi_overbought: 70
+  rsi_oversold: 30
+  volume_spike_multiplier: 2.0
+  near_high_low_pct: 0.05
+  crossover_lookback_days: 5
+  ma_slope_period: 10
+  ma_slope_flat_threshold: 0.005

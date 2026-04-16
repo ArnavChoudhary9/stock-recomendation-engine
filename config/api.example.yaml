@@ -1,0 +1,9 @@
+api:
+  host: "127.0.0.1"
+  port: 8000
+  cors:
+    allowed_origins: ["*"]
+
+kite:
+  api_key: "${KITE_API_KEY}"
+  api_secret: "${KITE_API_SECRET}"

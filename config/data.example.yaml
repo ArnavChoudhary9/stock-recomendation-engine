@@ -1,0 +1,11 @@
+data:
+  provider: "yahoo"
+  default_exchange: "NSE"
+  staleness_threshold_hours: 24
+  backfill_days: 365
+  batch_size: 50
+  rate_limit_delay_ms: 500
+
+storage:
+  path: "data/stocks.db"
+  wal_mode: true

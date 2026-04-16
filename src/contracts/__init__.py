@@ -1,0 +1,110 @@
+"""Inter-module contracts.
+
+All cross-module data flows through Pydantic models defined here. Modules in
+``src/`` may import from ``src.contracts`` and from their own package only —
+never from sibling modules.
+"""
+
+from src.contracts.api import (
+    API_VERSION,
+    APIError,
+    APIResponse,
+    ErrorDetail,
+    HealthStatus,
+    PaginatedResponse,
+    PaginationMeta,
+    ResponseMeta,
+)
+from src.contracts.data import (
+    Exchange,
+    Fundamentals,
+    Instrument,
+    OHLCVRow,
+    StockInfo,
+)
+from src.contracts.llm import StockReport
+from src.contracts.news import (
+    Article,
+    NewsBundle,
+    RawArticle,
+    SentimentLabel,
+    SentimentResult,
+)
+from src.contracts.portfolio import (
+    Alert,
+    AlertRule,
+    AlertType,
+    Holding,
+    PortfolioOverview,
+    PortfolioSnapshot,
+    Position,
+    Product,
+)
+from src.contracts.processing import (
+    Alignment,
+    AnalysisMetadata,
+    Crossover,
+    Features,
+    FundamentalFeatures,
+    IndicatorPeriods,
+    MarketCapTier,
+    Momentum,
+    MovingAverages,
+    ScoringConfig,
+    ScoringWeights,
+    SignalThresholds,
+    Slope,
+    StockAnalysis,
+    SubScores,
+    SupportResistance,
+    Volatility,
+    VolumeFeatures,
+)
+
+__all__ = [
+    "API_VERSION",
+    "APIError",
+    "APIResponse",
+    "Alert",
+    "AlertRule",
+    "AlertType",
+    "Alignment",
+    "AnalysisMetadata",
+    "Article",
+    "Crossover",
+    "ErrorDetail",
+    "Exchange",
+    "Features",
+    "FundamentalFeatures",
+    "Fundamentals",
+    "HealthStatus",
+    "Holding",
+    "IndicatorPeriods",
+    "Instrument",
+    "MarketCapTier",
+    "Momentum",
+    "MovingAverages",
+    "NewsBundle",
+    "OHLCVRow",
+    "PaginatedResponse",
+    "PaginationMeta",
+    "PortfolioOverview",
+    "PortfolioSnapshot",
+    "Position",
+    "Product",
+    "RawArticle",
+    "ResponseMeta",
+    "ScoringConfig",
+    "ScoringWeights",
+    "SentimentLabel",
+    "SentimentResult",
+    "SignalThresholds",
+    "Slope",
+    "StockAnalysis",
+    "StockInfo",
+    "StockReport",
+    "SubScores",
+    "SupportResistance",
+    "Volatility",
+    "VolumeFeatures",
+]

@@ -4,7 +4,7 @@
 
 Personal stock intelligence platform for Indian equities (NSE/BSE). Runs locally or on a second machine on the home network. Deterministic scoring core augmented with news sentiment and LLM insights. Integrates with Zerodha Kite Connect for live portfolio monitoring.
 
-See [PRD_v2.md](PRD_v2.md) for full product requirements.
+See [PRD.md](PRD.md) for full product requirements.
 
 ## Tech Stack
 
@@ -28,10 +28,10 @@ See [PRD_v2.md](PRD_v2.md) for full product requirements.
 
 ## Project Structure
 
-```
+```text
 stock_recommendation/
 ├── CLAUDE.md                    # This file
-├── PRD_v2.md                    # Product requirements
+├── PRD.md                       # Product requirements
 ├── pyproject.toml               # Python project config (deps, tools)
 ├── config/                      # All YAML configuration files
 │   ├── data.yaml
@@ -243,7 +243,8 @@ All inter-module data flows through Pydantic models defined in `src/contracts/`.
 
 ```bash
 # Setup
-python -m venv .venv && source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+pyenv local 3.13.2
+python -m venv venv && source venv/Scripts/activate  # Windows: venv\Scripts\activate
 pip install -e ".[dev]"
 python scripts/setup_db.py
 

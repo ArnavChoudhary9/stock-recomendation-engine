@@ -1,0 +1,24 @@
+portfolio:
+  snapshot_enabled: true
+  snapshot_time: "16:30"
+
+kite:
+  api_key: "${KITE_API_KEY}"
+  api_secret: "${KITE_API_SECRET}"
+  redirect_url: "http://localhost:8000/api/v1/kite/callback"
+  token_path: "data/.kite_token"
+
+monitoring:
+  poll_interval_seconds: 60
+  quote_interval_seconds: 30
+  market_hours:
+    open: "09:15"
+    close: "15:30"
+    timezone: "Asia/Kolkata"
+
+alerts:
+  enabled: true
+  score_drop_threshold: 0.3
+  volume_spike_multiplier: 3.0
+  sentiment_drop_threshold: -0.5
+  check_interval_minutes: 15
