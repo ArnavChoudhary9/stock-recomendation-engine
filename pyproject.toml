@@ -56,10 +56,24 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF"]
-ignore = ["E501"]
+# N812: date aliased to DateType to avoid shadowing Pydantic `date` fields.
+# UP046: PEP 695 generic syntax not universally supported with Pydantic v2 BaseModel yet.
+ignore = ["E501", "N812", "UP046"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
 warn_unused_ignores = true
 warn_redundant_casts = true
+
+[[tool.mypy.overrides]]
+module = [
+    "yfinance",
+    "apscheduler.*",
+    "kiteconnect",
+    "kiteconnect.*",
+    "textblob",
+    "feedparser",
+    "rapidfuzz",
+]
+ignore_missing_imports = true

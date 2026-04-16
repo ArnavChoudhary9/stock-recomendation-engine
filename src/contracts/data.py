@@ -35,13 +35,13 @@ class Fundamentals(BaseModel):
 
     symbol: str = Field(..., min_length=1)
     date: DateType
-    pe: float | None = Field(None, description="Price-to-earnings ratio")
-    market_cap: float | None = Field(None, ge=0, description="Market capitalisation in INR")
-    roe: float | None = Field(None, description="Return on equity (fraction, e.g. 0.18)")
+    pe: float | None = Field(default=None, description="Price-to-earnings ratio")
+    market_cap: float | None = Field(default=None, ge=0, description="Market capitalisation in INR")
+    roe: float | None = Field(default=None, description="Return on equity (fraction, e.g. 0.18)")
     eps: float | None = None
-    debt_equity: float | None = Field(None, ge=0)
-    promoter_holding: float | None = Field(None, ge=0, le=1, description="Fraction 0-1")
-    dividend_yield: float | None = Field(None, ge=0, description="Fraction 0-1")
+    debt_equity: float | None = Field(default=None, ge=0)
+    promoter_holding: float | None = Field(default=None, ge=0, le=1, description="Fraction 0-1")
+    dividend_yield: float | None = Field(default=None, ge=0, description="Fraction 0-1")
 
     @field_validator("symbol")
     @classmethod

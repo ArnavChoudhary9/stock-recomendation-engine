@@ -7,7 +7,7 @@ All HTTP responses follow:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -20,7 +20,7 @@ T = TypeVar("T")
 class ResponseMeta(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     version: str = API_VERSION
     request_id: str | None = None
 
