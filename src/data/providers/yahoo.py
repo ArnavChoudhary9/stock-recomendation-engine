@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import UTC, datetime
 from datetime import date as DateType
 from typing import Any
@@ -27,12 +28,33 @@ _SUFFIX = {"NSE": ".NS", "BSE": ".BO"}
 
 
 class YahooFinanceProvider(DataProvider):
-    """Yahoo Finance provider (free, no API key). ``yfinance`` must be installed."""
+    """Yahoo Finance provider (free, no API key). ``yfinance`` must be installed.
+
+    A process-wide async lock + minimum-interval gate spaces every outbound
+    call (history, info, search) so bulk operations can't burst past Yahoo's
+    rate limits.
+    """
 
     name = "yahoo"
 
-    def __init__(self, default_exchange: str = "NSE") -> None:
+    def __init__(
+        self, default_exchange: str = "NSE", *, min_interval_ms: int = 500
+    ) -> None:
         self.default_exchange = default_exchange
+        self.min_interval_s = max(0.0, min_interval_ms / 1000.0)
+        self._gate = asyncio.Lock()
+        self._last_call_t: float = 0.0
+
+    async def _throttle(self) -> None:
+        """Block until ``min_interval_s`` has elapsed since the last call."""
+        if self.min_interval_s <= 0:
+            return
+        async with self._gate:
+            now = time.monotonic()
+            wait = self.min_interval_s - (now - self._last_call_t)
+            if wait > 0:
+                await asyncio.sleep(wait)
+            self._last_call_t = time.monotonic()
 
     def _yahoo_ticker(self, symbol: str, exchange: str | None = None) -> str:
         sym = symbol.strip().upper()
@@ -82,6 +104,7 @@ class YahooFinanceProvider(DataProvider):
                     log.debug("skip malformed bar for %s on %s: %s", symbol, d, e)
             return rows
 
+        await self._throttle()
         try:
             return await asyncio.to_thread(_fetch)
         except ImportError:
@@ -101,6 +124,7 @@ class YahooFinanceProvider(DataProvider):
                 raise SymbolNotFoundError(f"Yahoo has no data for {ticker}")
             return info
 
+        await self._throttle()
         try:
             info = await asyncio.to_thread(_fetch)
         except SymbolNotFoundError:
@@ -139,6 +163,7 @@ class YahooFinanceProvider(DataProvider):
                 updated_at=datetime.now(UTC),
             )
 
+        await self._throttle()
         try:
             result = await asyncio.to_thread(_fetch)
         except Exception as e:

@@ -8,7 +8,6 @@ latest stored date and today.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 from datetime import date as DateType
@@ -111,17 +110,18 @@ class DataService:
         return written
 
     async def refresh_many(self, symbols: list[str]) -> dict[str, int]:
-        """Refresh a batch of symbols sequentially with rate-limit spacing."""
+        """Refresh a batch of symbols sequentially.
+
+        Per-call spacing lives in the provider (e.g. ``YahooFinanceProvider``'s
+        ``_throttle``), so this method just loops and collects results.
+        """
         results: dict[str, int] = {}
-        delay = self.config.data.rate_limit_delay_ms / 1000.0
-        for i, sym in enumerate(symbols):
+        for sym in symbols:
             try:
                 results[sym] = await self.refresh_symbol(sym)
             except DataProviderError as e:
                 log.error("refresh failed for %s: %s", sym, e)
                 results[sym] = 0
-            if delay and i < len(symbols) - 1:
-                await asyncio.sleep(delay)
         return results
 
     async def _backfill(
