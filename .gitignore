@@ -1,0 +1,69 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Config files (contain API keys and secrets)
+config/*.yaml
+config/*.yml
+!config/*.example.yaml
+
+# Kite Connect tokens
+data/.kite_token
+
+# SQLite database
+data/*.db
+data/*.db-wal
+data/*.db-shm
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.hypothesis/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Node / React UI
+ui/node_modules/
+ui/dist/
+ui/.env
+ui/.env.*
+
+# Logs
+*.log
+logs/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# mypy / type checking
+.mypy_cache/
+.ruff_cache/
