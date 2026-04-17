@@ -30,7 +30,7 @@ Each layer is a standalone module with abstract interfaces. Swap data providers,
 | Layer | Technology |
 | --- | --- |
 | Backend | Python 3.12+, FastAPI, Pydantic v2 |
-| Frontend | React 18+ (Vite), TailwindCSS, TradingView Lightweight Charts |
+| Frontend | Vite + React 18, TypeScript strict, React Router v6, shadcn/ui, TailwindCSS, Lucide, TanStack Query, Zustand, TradingView Lightweight Charts, Recharts |
 | Storage | SQLite (WAL mode) |
 | LLM | OpenRouter (any model — Claude, GPT, Llama, Gemini) |
 | Broker | Zerodha Kite Connect |
@@ -86,7 +86,7 @@ OPENROUTER_API_KEY=your_openrouter_key
 # Terminal 1: API server
 uvicorn src.api.app:create_app --factory --reload
 
-# Terminal 2: React dev server
+# Terminal 2: Vite dev server
 cd ui && npm run dev
 ```
 
@@ -102,6 +102,28 @@ python scripts/backfill.py --symbols RELIANCE,TCS,INFY --days 365
 
 # Run the analysis pipeline
 python scripts/run_pipeline.py --symbols RELIANCE,TCS
+```
+
+### UI Commands
+
+```bash
+cd ui
+
+# First-time setup
+npm install
+
+# Dev
+npm run dev                    # Vite at http://localhost:5173
+
+# Quality gates
+npm run lint
+npm run typecheck              # tsc --noEmit
+npm run test                   # Vitest (components + hooks)
+npm run test:e2e               # Playwright (happy-path flows)
+
+# Production
+npm run build                  # vite build → dist/
+npm run preview                # preview the production bundle
 ```
 
 ## Key Features
@@ -172,17 +194,32 @@ pytest tests/ --cov=src               # With coverage
 
 ## Project Status
 
-See [PRD_v2.md](PRD_v2.md) for detailed requirements and phase breakdown.
+See [PRD.md](PRD.md) for detailed requirements, and [ui/PHASES.md](ui/PHASES.md) for the UI sub-phase plan.
 
 | Phase | Status |
 | --- | --- |
-| 1. Data Layer | Not started |
-| 2. Processing Layer | Not started |
-| 3. News Layer | Not started |
-| 4. LLM Layer | Not started |
-| 4B. Portfolio & Kite Connect | Not started |
-| 5. API Layer | Not started |
-| 6. UI Layer | Not started |
+| 1. Data Layer | Done |
+| 2. Processing Layer | Done |
+| 3. News Layer | Done |
+| 4. LLM Layer | Done (polish ongoing) |
+| 4B. Portfolio & Kite Connect | Deferred (endpoints return 501 until shipped) |
+| 5. API Layer | In progress |
+| 6. UI Layer | Planning — see [ui/PHASES.md](ui/PHASES.md) |
+
+### UI Sub-phases (Phase 6)
+
+Architecture spec: [ui/CLEAN_UI_UX.md](ui/CLEAN_UI_UX.md). Execution plan: [ui/PHASES.md](ui/PHASES.md).
+
+| Sub-phase | Scope |
+| --- | --- |
+| 6.1 Foundation | Next.js scaffold, shadcn/ui, theme, layout shell, API client, shared types |
+| 6.2 Stock Browsing | Dashboard top-3, `/stocks` list with search + sector filter, command palette |
+| 6.3 Stock Detail | Price chart + MA overlays, indicator panel, score breakdown, signal badges, fundamentals |
+| 6.4 Intelligence | News feed with sentiment, LLM report cards, generate-fresh flow |
+| 6.5 Recommendations | Ranked table, compare mode, pipeline trigger + status |
+| 6.6 Portfolio | Holdings with P&L + score overlay, allocation, alerts, Kite auth (gated on Phase 4B) |
+| 6.7 Chat | Streaming chat with stock-context injection |
+| 6.8 Polish | Settings, dark mode, a11y, perf, tests, production build |
 
 ## License
 

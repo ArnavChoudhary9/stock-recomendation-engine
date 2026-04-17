@@ -4,13 +4,13 @@
 
 Personal stock intelligence platform for Indian equities (NSE/BSE). Runs locally or on a second machine on the home network. Deterministic scoring core augmented with news sentiment and LLM insights. Integrates with Zerodha Kite Connect for live portfolio monitoring.
 
-See [PRD.md](PRD.md) for full product requirements.
+See [PRD.md](PRD.md) for full product requirements. Deferred/backlog items (symbol management, watchlist page, breadcrumbs, auto-backfill toggle) live in [TODO.md](TODO.md).
 
 ## Tech Stack
 
 - **Language**: Python 3.12+
 - **API**: FastAPI + Pydantic v2 + Uvicorn
-- **Frontend**: React 18+ (Vite) + React Router + TailwindCSS + TradingView Lightweight Charts
+- **Frontend**: Vite + React 18 + TypeScript strict + React Router v6 + shadcn/ui + TailwindCSS + Lucide + TanStack Query + Zustand + TradingView Lightweight Charts + Recharts. UI architecture spec: [ui/CLEAN_UI_UX.md](ui/CLEAN_UI_UX.md). Sub-phase plan: [ui/PHASES.md](ui/PHASES.md).
 - **Storage**: SQLite (WAL mode) — single file, no external DB needed
 - **LLM**: OpenRouter (single API key, routes to any model — Claude, GPT, Llama, Gemini, etc.)
 - **Broker**: Zerodha Kite Connect API
@@ -24,7 +24,7 @@ See [PRD.md](PRD.md) for full product requirements.
 - Runs on `localhost` or `0.0.0.0` for LAN access from a second machine
 - All secrets in `.env` file (gitignored) — no encryption needed for local storage
 - SQLite DB file lives in `data/stocks.db` — back up this single file to preserve all data
-- Frontend is a plain React SPA served by Vite dev server (or built static files served by FastAPI)
+- Frontend is a Vite + React SPA (dev: `vite` on :5173; prod: `vite build` emits static `dist/` — served by FastAPI `StaticFiles` or any static host)
 
 ## Project Structure
 
@@ -145,25 +145,25 @@ stock_recommendation/
 │   ├── backfill.py              # CLI: backfill historical data
 │   ├── run_pipeline.py          # CLI: run full analysis pipeline
 │   └── setup_db.py              # CLI: initialize database
-├── ui/                          # React SPA (Vite)
+├── ui/                          # Vite + React SPA (see ui/PHASES.md)
+│   ├── CLEAN_UI_UX.md           # UI architecture spec (source of truth)
+│   ├── PHASES.md                # Sub-phase execution plan for Phase 6
 │   ├── package.json
 │   ├── vite.config.ts
-│   ├── tailwind.config.js
+│   ├── tailwind.config.ts
+│   ├── tsconfig.json
+│   ├── components.json          # shadcn/ui config
 │   ├── index.html
-│   ├── src/
-│   │   ├── main.tsx             # Entry point
-│   │   ├── App.tsx              # Router setup
-│   │   ├── pages/
-│   │   │   ├── Dashboard.tsx
-│   │   │   ├── StockDetail.tsx
-│   │   │   ├── Recommendations.tsx
-│   │   │   ├── Portfolio.tsx
-│   │   │   └── Settings.tsx
-│   │   ├── components/
-│   │   ├── hooks/
-│   │   └── lib/
-│   │       └── api-client.ts    # Typed fetch wrappers
-│   └── public/
+│   ├── public/
+│   └── src/
+│       ├── main.tsx             # Entry: providers tree + <RouterProvider/>
+│       ├── router.tsx           # Route definitions
+│       ├── routes/              # Route components (Dashboard, Stocks, StockDetail, Recommendations, Portfolio, Chat, Settings)
+│       ├── components/          # ui/ (shadcn), shared/, layout/, charts/, stock/, portfolio/
+│       ├── features/            # Domain hooks + feature shells
+│       ├── lib/                 # api/ (client + endpoints), hooks/, utils/, types/ (mirrors src/contracts)
+│       ├── store/               # Zustand stores (theme, chat context, filters)
+│       └── styles/              # globals.css, Tailwind tokens
 └── data/                        # Runtime data (gitignored)
     └── stocks.db
 ```
@@ -249,8 +249,10 @@ pip install -e ".[dev]"
 python scripts/setup_db.py
 
 # Run
-uvicorn src.api.app:create_app --factory --reload     # API server
-cd ui && npm run dev                                    # React dev server (Vite)
+uvicorn src.api.app:create_app --factory --reload     # API server (:8000)
+cd ui && npm run dev                                    # Vite dev server (:5173)
+cd ui && npm run lint && npm run typecheck              # UI quality gates
+cd ui && npm run build && npm run preview               # UI production build + preview
 
 # Test
 pytest tests/unit/                                      # Unit tests only
