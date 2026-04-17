@@ -147,6 +147,26 @@ class DataService:
             return 0
         return await self.repo.upsert_ohlcv(symbol, rows)
 
+    async def get_cached_analysis(
+        self, symbol: str, cache_key: str
+    ) -> str | None:
+        return await self.repo.get_cached_analysis(symbol, cache_key)
+
+    async def put_cached_analysis(
+        self, symbol: str, cache_key: str, payload: str
+    ) -> None:
+        await self.repo.put_cached_analysis(symbol, cache_key, payload)
+
+    async def get_cached_report(
+        self, symbol: str, cache_key: str
+    ) -> str | None:
+        return await self.repo.get_cached_report(symbol, cache_key)
+
+    async def put_cached_report(
+        self, symbol: str, cache_key: str, payload: str
+    ) -> None:
+        await self.repo.put_cached_report(symbol, cache_key, payload)
+
     async def _is_symbol_stale(self, symbol: str) -> bool:
         """True if we haven't refreshed ``symbol`` within the staleness window."""
         last = await self.repo.last_updated(symbol)

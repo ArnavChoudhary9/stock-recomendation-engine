@@ -83,3 +83,33 @@ class StockRepository(ABC):
     @abstractmethod
     async def get_watchlist_item(self, symbol: str) -> WatchlistItem | None:
         """Return the watchlist entry for ``symbol``, or ``None`` if not watched."""
+
+    # ---------- Cache (deterministic analyses + LLM reports) ----------
+
+    @abstractmethod
+    async def get_cached_analysis(
+        self, symbol: str, cache_key: str
+    ) -> str | None:
+        """Return the serialized analysis payload for ``(symbol, cache_key)``, or ``None``."""
+
+    @abstractmethod
+    async def put_cached_analysis(
+        self, symbol: str, cache_key: str, payload: str
+    ) -> None:
+        """Store ``payload`` as the cached analysis for ``symbol``."""
+
+    @abstractmethod
+    async def get_cached_report(
+        self, symbol: str, cache_key: str
+    ) -> str | None:
+        """Return the serialized report payload for ``(symbol, cache_key)``, or ``None``."""
+
+    @abstractmethod
+    async def put_cached_report(
+        self, symbol: str, cache_key: str, payload: str
+    ) -> None:
+        """Store ``payload`` as the cached LLM report for ``symbol``."""
+
+    @abstractmethod
+    async def invalidate_cache(self, symbol: str) -> None:
+        """Drop cached analysis + report for ``symbol`` (call after OHLCV writes)."""

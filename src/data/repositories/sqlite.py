@@ -407,6 +407,75 @@ class SQLiteStockRepository(StockRepository):
 
         return await asyncio.to_thread(_q)
 
+    # ---------- Cache ----------
+
+    async def get_cached_analysis(
+        self, symbol: str, cache_key: str
+    ) -> str | None:
+        return await self._cache_get("stock_analyses", symbol, cache_key)
+
+    async def put_cached_analysis(
+        self, symbol: str, cache_key: str, payload: str
+    ) -> None:
+        await self._cache_put("stock_analyses", symbol, cache_key, payload)
+
+    async def get_cached_report(
+        self, symbol: str, cache_key: str
+    ) -> str | None:
+        return await self._cache_get("stock_reports", symbol, cache_key)
+
+    async def put_cached_report(
+        self, symbol: str, cache_key: str, payload: str
+    ) -> None:
+        await self._cache_put("stock_reports", symbol, cache_key, payload)
+
+    async def invalidate_cache(self, symbol: str) -> None:
+        conn = self._require_conn()
+        sym = symbol.strip().upper()
+        async with self._write_lock:
+            def _w() -> None:
+                conn.execute("DELETE FROM stock_analyses WHERE symbol = ?", (sym,))
+                conn.execute("DELETE FROM stock_reports WHERE symbol = ?", (sym,))
+
+            await asyncio.to_thread(_w)
+
+    async def _cache_get(
+        self, table: str, symbol: str, cache_key: str
+    ) -> str | None:
+        conn = self._require_conn()
+        sym = symbol.strip().upper()
+
+        def _q() -> str | None:
+            row = conn.execute(
+                f"SELECT payload FROM {table} WHERE symbol = ? AND cache_key = ?",
+                (sym, cache_key),
+            ).fetchone()
+            return row["payload"] if row else None
+
+        return await asyncio.to_thread(_q)
+
+    async def _cache_put(
+        self, table: str, symbol: str, cache_key: str, payload: str
+    ) -> None:
+        conn = self._require_conn()
+        sym = symbol.strip().upper()
+        now = datetime.now(UTC).isoformat()
+        async with self._write_lock:
+            def _w() -> None:
+                conn.execute(
+                    f"""
+                    INSERT INTO {table} (symbol, cache_key, payload, computed_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(symbol) DO UPDATE SET
+                        cache_key = excluded.cache_key,
+                        payload = excluded.payload,
+                        computed_at = excluded.computed_at
+                    """,
+                    (sym, cache_key, payload, now),
+                )
+
+            await asyncio.to_thread(_w)
+
 
 def _row_to_watchlist_item(row: sqlite3.Row) -> WatchlistItem:
     return WatchlistItem(

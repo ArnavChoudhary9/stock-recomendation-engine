@@ -8,11 +8,23 @@ Providers never touch contracts from sibling modules — only what's passed in.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TypeVar
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
+from typing import Literal, TypeVar
 
 from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
+
+ChatRole = Literal["system", "user", "assistant"]
+
+
+@dataclass(frozen=True)
+class ChatMessage:
+    """One turn in a chat conversation — provider-agnostic representation."""
+
+    role: ChatRole
+    content: str
 
 
 class LLMError(Exception):
@@ -61,3 +73,29 @@ class LLMProvider(ABC):
             Transient or terminal failures. The service layer decides how to
             handle fallback across models.
         """
+
+    def stream_chat(
+        self,
+        *,
+        messages: list[ChatMessage],
+        model: str,
+    ) -> AsyncIterator[str]:
+        """Stream plain-text completion deltas for a chat conversation.
+
+        Unlike :meth:`generate`, this is free-form text — no JSON schema,
+        no validation. Default implementation raises — providers opt in by
+        overriding. Callers should treat ``NotImplementedError`` as a
+        "chat not supported by this backend" signal.
+
+        Raises
+        ------
+        LLMTimeoutError, LLMRateLimitError, LLMAuthError, LLMError
+            Terminal failures. Chat streaming is single-shot; retries + model
+            fallback are the caller's responsibility.
+        NotImplementedError
+            The provider does not support chat streaming.
+        """
+        del messages, model
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support chat streaming"
+        )

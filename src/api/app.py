@@ -26,6 +26,7 @@ from src.api.errors import register_exception_handlers  # noqa: E402
 from src.api.middleware import install_request_id_middleware  # noqa: E402
 from src.api.routers import (  # noqa: E402
     analysis_router,
+    chat_router,
     kite_router,
     news_router,
     portfolio_router,
@@ -88,5 +89,6 @@ def create_app(config: APIConfig | None = None) -> FastAPI:
     app.include_router(portfolio_router, prefix=API_PREFIX)
     app.include_router(kite_router, prefix=API_PREFIX)
     app.include_router(watchlist_router, prefix=API_PREFIX)
+    app.include_router(chat_router, prefix=API_PREFIX)
 
     return app

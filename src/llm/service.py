@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -22,6 +23,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoes
 from src.config import LLMConfig
 from src.contracts import Article, NewsBundle, NewsReference, StockAnalysis, StockReport
 from src.llm.providers.base import (
+    ChatMessage,
     LLMAllModelsFailedError,
     LLMAuthError,
     LLMError,
@@ -127,6 +129,19 @@ class LLMService:
     def _render_prompt(self, analysis: StockAnalysis, news: NewsBundle) -> str:
         template = self._env.get_template(STOCK_REPORT_TEMPLATE)
         return template.render(analysis=analysis, news=news)
+
+    async def stream_chat(
+        self, messages: list[ChatMessage]
+    ) -> AsyncIterator[str]:
+        """Stream free-form chat completions through the configured model.
+
+        No schema validation, no model fallback — chat is best-effort single-shot.
+        Auth errors propagate to the caller so the route can return 401/503.
+        """
+        async for delta in self.provider.stream_chat(
+            messages=messages, model=self.config.llm.model
+        ):
+            yield delta
 
 
 def _build_system_prompt() -> str:

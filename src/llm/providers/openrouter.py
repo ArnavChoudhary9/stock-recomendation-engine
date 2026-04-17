@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections.abc import AsyncIterator
 from typing import TypeVar
 
 import httpx
@@ -30,6 +31,7 @@ from pydantic import BaseModel, ValidationError
 
 from src.config import LLMProviderConfig
 from src.llm.providers.base import (
+    ChatMessage,
     LLMAuthError,
     LLMError,
     LLMInvalidResponseError,
@@ -114,6 +116,53 @@ class OpenRouterProvider(LLMProvider):
             raise LLMInvalidResponseError(
                 f"Model {model} output failed schema validation: {e.errors()}"
             ) from e
+
+
+    async def stream_chat(
+        self,
+        *,
+        messages: list[ChatMessage],
+        model: str,
+    ) -> AsyncIterator[str]:
+        """Stream plain-text deltas from an OpenRouter chat completion."""
+        payload = [{"role": m.role, "content": m.content} for m in messages]
+        try:
+            stream = await self._client.chat.completions.create(
+                model=model,
+                messages=payload,  # type: ignore[arg-type]
+                temperature=self.config.temperature,
+                max_tokens=self.config.max_tokens,
+                stream=True,
+            )
+        except AuthenticationError as e:
+            raise LLMAuthError(str(e)) from e
+        except RateLimitError as e:
+            raise LLMRateLimitError(str(e)) from e
+        except (APITimeoutError, APIConnectionError) as e:
+            raise LLMTimeoutError(str(e)) from e
+        except APIStatusError as e:
+            if e.status_code == 429:
+                raise LLMRateLimitError(str(e)) from e
+            if e.status_code in (401, 403):
+                raise LLMAuthError(str(e)) from e
+            raise LLMError(f"OpenRouter returned HTTP {e.status_code}: {e}") from e
+
+        try:
+            async for chunk in stream:
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
+                content = getattr(delta, "content", None)
+                if content:
+                    yield content
+        except AuthenticationError as e:
+            raise LLMAuthError(str(e)) from e
+        except RateLimitError as e:
+            raise LLMRateLimitError(str(e)) from e
+        except (APITimeoutError, APIConnectionError) as e:
+            raise LLMTimeoutError(str(e)) from e
+        except APIStatusError as e:
+            raise LLMError(f"OpenRouter stream HTTP {e.status_code}: {e}") from e
 
 
 def _strip_markdown_fence(text: str) -> str:

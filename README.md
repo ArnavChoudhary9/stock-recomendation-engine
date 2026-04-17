@@ -202,24 +202,24 @@ See [PRD.md](PRD.md) for detailed requirements, and [ui/PHASES.md](ui/PHASES.md)
 | 2. Processing Layer | Done |
 | 3. News Layer | Done |
 | 4. LLM Layer | Done (polish ongoing) |
-| 4B. Portfolio & Kite Connect | Deferred (endpoints return 501 until shipped) |
+| 4B. Portfolio & Kite Connect | Deferred (endpoints return 501 until shipped; UI already scaffolded) |
 | 5. API Layer | In progress |
-| 6. UI Layer | Planning — see [ui/PHASES.md](ui/PHASES.md) |
+| 6. UI Layer | Done — see [ui/PHASES.md](ui/PHASES.md) |
 
 ### UI Sub-phases (Phase 6)
 
 Architecture spec: [ui/CLEAN_UI_UX.md](ui/CLEAN_UI_UX.md). Execution plan: [ui/PHASES.md](ui/PHASES.md).
 
-| Sub-phase | Scope |
-| --- | --- |
-| 6.1 Foundation | Next.js scaffold, shadcn/ui, theme, layout shell, API client, shared types |
-| 6.2 Stock Browsing | Dashboard top-3, `/stocks` list with search + sector filter, command palette |
-| 6.3 Stock Detail | Price chart + MA overlays, indicator panel, score breakdown, signal badges, fundamentals |
-| 6.4 Intelligence | News feed with sentiment, LLM report cards, generate-fresh flow |
-| 6.5 Recommendations | Ranked table, compare mode, pipeline trigger + status |
-| 6.6 Portfolio | Holdings with P&L + score overlay, allocation, alerts, Kite auth (gated on Phase 4B) |
-| 6.7 Chat | Streaming chat with stock-context injection |
-| 6.8 Polish | Settings, dark mode, a11y, perf, tests, production build |
+| Sub-phase | Scope | Status |
+| --- | --- | --- |
+| 6.1 Foundation | Vite scaffold, shadcn/ui, theme, layout shell, API client, shared types | Done |
+| 6.2 Stock Browsing | Dashboard top-3, `/stocks` list with search + sector filter, ⌘K command palette | Done |
+| 6.3 Stock Detail | Price + volume chart with MA overlays, indicator panel, score breakdown, signal badges, fundamentals | Done |
+| 6.4 Intelligence | News feed with sentiment, LLM report cards, generate-fresh flow | Done |
+| 6.5 Recommendations | Ranked table, compare mode, pipeline trigger + status | Done |
+| 6.6 Portfolio | Holdings table, allocation pie, alerts, Kite connect banner (501-aware) | Done |
+| 6.7 Chat | Streaming chat UI with stock-context chip and localStorage persistence | Done |
+| 6.8 Polish | Code-splitting, error boundary, settings, a11y, client tests, production build | Done |
 
 ## License
 

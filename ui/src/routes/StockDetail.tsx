@@ -15,6 +15,8 @@ import { MovingAveragesPanel } from '@/components/stock/MovingAveragesPanel';
 import { IndicatorPanel } from '@/components/stock/IndicatorPanel';
 import { FundamentalsTable } from '@/components/stock/FundamentalsTable';
 import { SignalBadges } from '@/components/stock/SignalBadges';
+import { NewsFeed } from '@/components/news/NewsFeed';
+import { ReportCard } from '@/components/report/ReportCard';
 import { useStock } from '@/features/stocks/useStock';
 import { useStockAnalysis } from '@/features/stocks/useStockAnalysis';
 import { useStockOhlcv } from '@/features/stocks/useStockOhlcv';
@@ -197,17 +199,11 @@ export function StockDetail() {
         </TabsContent>
 
         <TabsContent value="news">
-          <EmptyState
-            title="Phase 6.4 — coming up"
-            description="News feed with sentiment pills and aggregate sentiment meter."
-          />
+          <NewsFeed symbol={symbol} />
         </TabsContent>
 
         <TabsContent value="report">
-          <EmptyState
-            title="Phase 6.4 — coming up"
-            description="LLM-generated structured report: summary, insights, risks, news impact."
-          />
+          <ReportCard symbol={symbol} />
         </TabsContent>
 
         <TabsContent value="fundamentals">

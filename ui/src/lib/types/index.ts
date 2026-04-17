@@ -194,25 +194,43 @@ export interface StockAnalysis {
 
 // ——— News ———
 
+export type SentimentLabel = 'positive' | 'negative' | 'neutral';
+
+export interface SentimentResult {
+  score: number; // -1..+1
+  label: SentimentLabel;
+  confidence: number; // 0..1
+  analyzer: string;
+}
+
 export interface Article {
   title: string;
   summary: string | null;
-  source: string;
   url: string;
+  source: string;
   published_at: string;
-  sentiment: number | null;
+  sentiment: SentimentResult;
 }
 
 export interface NewsBundle {
   symbol: string;
   timestamp: string;
   articles: Article[];
-  aggregate_sentiment: number;
+  aggregate_sentiment: number; // -1..+1
   article_count: number;
   time_window_hours: number;
 }
 
 // ——— LLM reports ———
+
+export interface NewsReference {
+  title: string;
+  url: string;
+  source: string;
+  published_at: string;
+  sentiment_score: number;
+  sentiment_label: string;
+}
 
 export interface StockReport {
   symbol: string;
@@ -223,6 +241,11 @@ export interface StockReport {
   news_impact: string;
   confidence: number;
   reasoning_chain: string[];
+  recommendation: Recommendation;
+  recommendation_rationale: string;
+  sources: NewsReference[];
+  model_used: string | null;
+  degraded: boolean;
 }
 
 // ——— Pipeline ———
@@ -231,4 +254,95 @@ export interface PipelineRunResult {
   scheduled: boolean;
   symbols_count: number;
   message: string;
+}
+
+// ——— Portfolio (Phase 4B — endpoints return 501 until then) ———
+
+export interface Holding {
+  symbol: string;
+  exchange: string;
+  quantity: number;
+  average_price: number;
+  last_price: number;
+  pnl: number;
+  pnl_pct: number;
+  day_change: number;
+  day_change_pct: number;
+}
+
+export type Product = 'CNC' | 'MIS' | 'NRML' | 'CO' | 'BO';
+
+export interface Position {
+  symbol: string;
+  exchange: string;
+  product: Product;
+  quantity: number;
+  average_price: number;
+  last_price: number;
+  pnl: number;
+  buy_quantity: number;
+  sell_quantity: number;
+}
+
+export interface PortfolioOverview {
+  total_investment: number;
+  current_value: number;
+  total_pnl: number;
+  total_pnl_pct: number;
+  day_pnl: number;
+  holdings: Holding[];
+  positions: Position[];
+  allocation_by_sector: Record<string, number>;
+  allocation_by_market_cap: Record<string, number>;
+  concentration_warnings: string[];
+  score_overlay: Record<string, number>;
+  stale: boolean;
+  as_of: string;
+}
+
+export type AlertType = 'score_drop' | 'signal_change' | 'volume_spike' | 'sentiment' | 'price';
+
+export interface AlertRule {
+  id: string;
+  type: AlertType;
+  symbol: string | null;
+  threshold: number;
+  enabled: boolean;
+  created_at: string;
+}
+
+export interface Alert {
+  id: string;
+  rule_id: string;
+  symbol: string;
+  message: string;
+  timestamp: string;
+  acknowledged: boolean;
+}
+
+// ——— Kite session status ———
+
+export interface KiteStatus {
+  connected: boolean;
+  expires_at: string | null;
+  user_id: string | null;
+}
+
+// ——— Chat (Phase 6.7 — backend endpoint not yet implemented) ———
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  created_at: string;
+  context_symbols?: string[];
+  error?: string;
+}
+
+export interface Conversation {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  created_at: string;
+  updated_at: string;
 }

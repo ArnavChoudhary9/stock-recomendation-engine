@@ -15,6 +15,7 @@ from src.contracts.api import (
     PaginationMeta,
     ResponseMeta,
 )
+from src.contracts.chat import ChatRole, ChatStreamRequest, ChatTurn
 from src.contracts.data import (
     Exchange,
     Fundamentals,
@@ -74,6 +75,9 @@ __all__ = [
     "Alignment",
     "AnalysisMetadata",
     "Article",
+    "ChatRole",
+    "ChatStreamRequest",
+    "ChatTurn",
     "Crossover",
     "ErrorDetail",
     "Exchange",

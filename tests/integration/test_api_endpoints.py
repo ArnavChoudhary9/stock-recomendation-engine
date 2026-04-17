@@ -58,6 +58,7 @@ class StubLLMService:
 
     def __init__(self) -> None:
         self.calls = 0
+        self.chat_calls: list[list] = []
 
     async def generate_report(self, analysis, news) -> StockReport:  # type: ignore[no-untyped-def]
         del news
@@ -74,6 +75,11 @@ class StubLLMService:
             model_used="stub/model",
             degraded=False,
         )
+
+    async def stream_chat(self, messages):  # type: ignore[no-untyped-def]
+        self.chat_calls.append(list(messages))
+        for chunk in ("hello ", "world"):
+            yield chunk
 
 
 async def _make_container(tmp_path: Path, *, include_llm: bool = True) -> ServiceContainer:
@@ -324,6 +330,59 @@ async def test_report_503_when_llm_unconfigured(client_no_llm: AsyncClient) -> N
     r = await client_no_llm.get(f"{API_PREFIX}/stocks/TCS/report")
     assert r.status_code == 503
     assert r.json()["error"]["code"] == "LLM_UNAVAILABLE"
+
+
+# ---------------------------- Chat endpoints ----------------------------
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_emits_deltas_and_done(client: AsyncClient) -> None:
+    async with client.stream(
+        "POST",
+        f"{API_PREFIX}/chat/stream",
+        json={
+            "messages": [{"role": "user", "content": "What's up with TCS?"}],
+            "context_symbols": ["TCS"],
+        },
+    ) as r:
+        assert r.status_code == 200
+        assert r.headers["content-type"].startswith("application/x-ndjson")
+        frames = []
+        async for line in r.aiter_lines():
+            line = line.strip()
+            if line:
+                frames.append(line)
+    import json as _json
+
+    parsed = [_json.loads(f) for f in frames]
+    deltas = [f["delta"] for f in parsed if "delta" in f]
+    assert deltas == ["hello ", "world"]
+    assert parsed[-1] == {"done": True}
+
+    container = client._transport.app.state.container  # type: ignore[attr-defined]
+    sent = container.llm_service.chat_calls[-1]
+    assert sent[0].role == "system"
+    assert "TCS" in sent[0].content  # context block mentions the symbol
+    assert sent[-1].role == "user"
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_503_when_llm_unconfigured(client_no_llm: AsyncClient) -> None:
+    r = await client_no_llm.post(
+        f"{API_PREFIX}/chat/stream",
+        json={"messages": [{"role": "user", "content": "hi"}], "context_symbols": []},
+    )
+    assert r.status_code == 503
+    assert r.json()["error"]["code"] == "LLM_UNAVAILABLE"
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_rejects_empty_messages(client: AsyncClient) -> None:
+    r = await client.post(
+        f"{API_PREFIX}/chat/stream",
+        json={"messages": [], "context_symbols": []},
+    )
+    assert r.status_code == 422
 
 
 # ---------------------------- Portfolio stubs (Phase 4B) ----------------------------

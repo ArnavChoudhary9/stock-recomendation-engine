@@ -1,6 +1,7 @@
 import { Search } from 'lucide-react';
 import { ThemeToggle } from '@/components/shared/ThemeToggle';
 import { HealthPill } from '@/components/shared/HealthPill';
+import { LastRunPill } from '@/components/recommendation/LastRunPill';
 import { useCommandPaletteStore } from '@/store/commandPalette';
 
 export function TopBar() {
@@ -22,6 +23,7 @@ export function TopBar() {
         </kbd>
       </button>
       <div className="ml-auto flex items-center gap-2">
+        <LastRunPill />
         <HealthPill />
         <ThemeToggle />
       </div>

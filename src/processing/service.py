@@ -49,6 +49,14 @@ class DataSource(Protocol):
 
     async def ensure_stock(self, symbol: str) -> StockInfo | None: ...
 
+    async def get_cached_analysis(
+        self, symbol: str, cache_key: str
+    ) -> str | None: ...
+
+    async def put_cached_analysis(
+        self, symbol: str, cache_key: str, payload: str
+    ) -> None: ...
+
 
 class ProcessingError(Exception):
     """Base exception for processing-layer failures."""
@@ -121,6 +129,15 @@ class DefaultProcessingService(ProcessingService):
         if not ohlcv:
             raise ProcessingError(f"No OHLCV data for {symbol}")
         fundamentals = await self.data.get_fundamentals(symbol)
+
+        cache_key = _analysis_cache_key(ohlcv[-1], fundamentals, self._config_hash)
+        cached_payload = await self.data.get_cached_analysis(symbol, cache_key)
+        if cached_payload is not None:
+            try:
+                return StockAnalysis.model_validate_json(cached_payload)
+            except ValueError as e:
+                log.warning("cached analysis for %s unreadable, recomputing: %s", symbol, e)
+
         try:
             features = self.compute_features(symbol, ohlcv, fundamentals)
         except InsufficientDataError as e:
@@ -133,7 +150,7 @@ class DefaultProcessingService(ProcessingService):
             score, sub_scores, features.fundamentals, signals
         )
 
-        return StockAnalysis(
+        analysis = StockAnalysis(
             symbol=symbol,
             timestamp=features.as_of,
             moving_averages=features.moving_averages,
@@ -151,6 +168,10 @@ class DefaultProcessingService(ProcessingService):
             recommendation=recommendation,
             recommendation_rationale=rationale,
         )
+        await self.data.put_cached_analysis(
+            symbol, cache_key, analysis.model_dump_json()
+        )
+        return analysis
 
     async def rank_stocks(self, symbols: list[str]) -> list[StockAnalysis]:
         analyses: list[StockAnalysis] = []
@@ -166,4 +187,23 @@ class DefaultProcessingService(ProcessingService):
 def _hash_config(config: ScoringConfig) -> str:
     """Stable fingerprint of the scoring config for reproducibility metadata."""
     payload = json.dumps(config.model_dump(mode="json"), sort_keys=True)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def _analysis_cache_key(
+    latest_bar: OHLCVRow,
+    fundamentals: Fundamentals | None,
+    config_hash: str,
+) -> str:
+    """Fingerprint of inputs to the deterministic analysis.
+
+    Captures new/corrected OHLCV bars (date + close + volume) and the latest
+    fundamentals snapshot date. A mismatch triggers recomputation; a match
+    means nothing relevant to the score has changed.
+    """
+    fund_date = fundamentals.date.isoformat() if fundamentals else ""
+    payload = (
+        f"{latest_bar.date.isoformat()}|{latest_bar.close}|{latest_bar.volume}|"
+        f"{fund_date}|{config_hash}"
+    )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]

@@ -15,6 +15,7 @@ export const endpoints = {
   stockAnalysis: (symbol: string) =>
     `${API_PREFIX}/stocks/${encodeURIComponent(symbol)}/analysis`,
   recommendations: `${API_PREFIX}/recommendations`,
+  recommendationsHistory: `${API_PREFIX}/recommendations/history`,
 
   stockNews: (symbol: string) => `${API_PREFIX}/stocks/${encodeURIComponent(symbol)}/news`,
 
@@ -23,7 +24,15 @@ export const endpoints = {
   // Portfolio / Kite (return 501 until Phase 4B; UI renders coming-soon states)
   portfolioOverview: `${API_PREFIX}/portfolio/overview`,
   portfolioHoldings: `${API_PREFIX}/portfolio/holdings`,
+  portfolioPositions: `${API_PREFIX}/portfolio/positions`,
+  portfolioPerformance: `${API_PREFIX}/portfolio/performance`,
   portfolioAlerts: `${API_PREFIX}/portfolio/alerts`,
+  portfolioAlert: (id: string) =>
+    `${API_PREFIX}/portfolio/alerts/${encodeURIComponent(id)}`,
   kiteAuthUrl: `${API_PREFIX}/kite/auth-url`,
   kiteStatus: `${API_PREFIX}/kite/status`,
+  kiteCallback: `${API_PREFIX}/kite/callback`,
+
+  // Chat (Phase 6.7 — backend endpoint not yet implemented; UI handles 404/501)
+  chatStream: `${API_PREFIX}/chat/stream`,
 } as const;
