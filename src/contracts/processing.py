@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 Alignment = Literal["bullish", "bearish", "mixed"]
 Slope = Literal["rising", "falling", "flat"]
 Crossover = Literal["golden_cross", "death_cross"]
+MACDCrossover = Literal["bullish", "bearish"]
 MarketCapTier = Literal["large", "mid", "small", "micro"]
 Recommendation = Literal["BUY", "HOLD", "SELL"]
 
@@ -72,6 +73,35 @@ class FundamentalFeatures(BaseModel):
     roe_sector_rank: float | None = Field(default=None, ge=0, le=1, description="Percentile within sector")
 
 
+class MACDFeatures(BaseModel):
+    """MACD snapshot + recent signal-line crossover state."""
+
+    model_config = ConfigDict(frozen=True)
+
+    macd_line: float
+    signal_line: float
+    histogram: float = Field(..., description="macd_line - signal_line; positive = bullish momentum")
+    crossover: MACDCrossover | None = None
+    crossover_days_ago: int | None = Field(default=None, ge=0)
+
+
+class BollingerBands(BaseModel):
+    """Bollinger band envelope + position + volatility proxy."""
+
+    model_config = ConfigDict(frozen=True)
+
+    upper: float
+    middle: float
+    lower: float
+    percent_b: float = Field(
+        ..., description="Fractional position inside the bands (0 = at lower, 1 = at upper)"
+    )
+    bandwidth: float = Field(..., ge=0, description="Relative band width (upper-lower)/middle")
+    squeeze: bool = Field(
+        ..., description="True when bandwidth is below the configured squeeze threshold"
+    )
+
+
 class SupportResistance(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -97,6 +127,9 @@ class Features(BaseModel):
     volatility: Volatility
     fundamentals: FundamentalFeatures
     support_resistance: SupportResistance
+    # Optional — present when enough history; absent for very young tickers.
+    macd: MACDFeatures | None = None
+    bollinger: BollingerBands | None = None
 
     @field_validator("symbol")
     @classmethod
@@ -105,7 +138,11 @@ class Features(BaseModel):
 
 
 class ScoringWeights(BaseModel):
-    """Weights for the composite score. Must sum to 1.0 (validated)."""
+    """Weights for the composite score. Normalised by ``total()``.
+
+    ``trend_following`` and ``mean_reversion`` default to 0 so adding these
+    indicators doesn't move existing scores unless the user opts in via config.
+    """
 
     moving_average: float = Field(0.25, ge=0, le=1)
     momentum: float = Field(0.20, ge=0, le=1)
@@ -113,6 +150,8 @@ class ScoringWeights(BaseModel):
     volatility: float = Field(0.10, ge=0, le=1)
     fundamental: float = Field(0.20, ge=0, le=1)
     support_resistance: float = Field(0.10, ge=0, le=1)
+    trend_following: float = Field(default=0.0, ge=0, le=1, description="MACD-based")
+    mean_reversion: float = Field(default=0.0, ge=0, le=1, description="Bollinger-based")
 
     def total(self) -> float:
         return (
@@ -122,6 +161,8 @@ class ScoringWeights(BaseModel):
             + self.volatility
             + self.fundamental
             + self.support_resistance
+            + self.trend_following
+            + self.mean_reversion
         )
 
 
@@ -133,6 +174,9 @@ class SignalThresholds(BaseModel):
     crossover_lookback_days: int = 5
     ma_slope_period: int = 10
     ma_slope_flat_threshold: float = 0.005
+    macd_crossover_lookback_days: int = 5
+    bollinger_squeeze_threshold: float = 0.04
+    bollinger_breakout_epsilon: float = 0.001
 
 
 class IndicatorPeriods(BaseModel):
@@ -143,6 +187,11 @@ class IndicatorPeriods(BaseModel):
     volatility_period: int = 20
     momentum_periods: list[int] = Field(default_factory=lambda: [5, 10, 20])
     volume_avg_period: int = 20
+    macd_fast: int = 12
+    macd_slow: int = 26
+    macd_signal: int = 9
+    bollinger_period: int = 20
+    bollinger_std_dev: float = 2.0
 
 
 class ScoringConfig(BaseModel):
@@ -166,6 +215,8 @@ class SubScores(BaseModel):
     volatility: float = Field(..., ge=0, le=1)
     fundamental: float = Field(..., ge=0, le=1)
     support_resistance: float = Field(..., ge=0, le=1)
+    trend_following: float = Field(default=0.5, ge=0, le=1, description="MACD-based")
+    mean_reversion: float = Field(default=0.5, ge=0, le=1, description="Bollinger-based")
 
 
 class AnalysisMetadata(BaseModel):

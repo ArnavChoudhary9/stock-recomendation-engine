@@ -6,15 +6,15 @@ Deferred work — not blocking current phases. Items here are captured so they d
 
 ## Data / Symbols management
 
-- [ ] **Move tracked-symbol list from file into the DB.** Today the watchlist to fetch is seeded from `config/symbols/nifty50.txt` via `scripts/backfill.py`. Promote it to a first-class `tracked_symbols` table (or reuse `stocks` with a boolean flag) so the user can add/remove symbols at runtime without editing files.
-- [ ] **"Add symbols" UI.** Free-form input (or CSV paste) on `/settings` or a dedicated `/stocks/manage` route to add arbitrary NSE/BSE symbols beyond NIFTY 50. On add: validate against provider, backfill N days, persist to the tracked-symbols table.
+- [x] ~~**Tracked-symbol list in the DB.**~~ Confirmed existing: the `stocks` table is populated by `DataService.ensure_stock` on any refresh. The `nifty50.txt` file is only a bootstrap list.
+- [x] ~~**"Add symbols" UI.**~~ Shipped 2026-04-17: `/stocks/manage` has an Add-symbol form that hits `POST /stocks/backfill` with a configurable history window.
 - [ ] **Auto-backfill toggle in Settings.** New option in `config/data.yaml` + `/settings` UI slider: when enabled, a scheduled job (APScheduler) runs the incremental backfill daily at a configurable time. Respect market holidays.
 - [ ] **"Update all stocks" manual button in Settings.** One-click button that triggers `/pipeline/run` (which already refreshes every tracked symbol). Show progress + last-run timestamp. Should be usable even when auto-backfill is off.
-- [ ] **Manual historical backfill with target date.** UI form (Settings or `/stocks/manage`): pick a date, optionally a symbol subset, trigger a job that backfills OHLCV from that date up to today. Needs backend support — currently `scripts/backfill.py` is the only path; add an API endpoint that wraps the same `DataService.refresh_many` flow with a `start_date` parameter.
+- [x] ~~**Manual historical backfill with target date.**~~ Shipped 2026-04-17: `POST /api/v1/stocks/backfill` (accepts `symbols[]`, `start_date`, `days`, `force`, capped at 20) + `/stocks/manage` Backfill-from-date form.
 
 ## Portfolio / Watchlist
 
-- [ ] **Watchlist page.** New `/watchlist` route showing symbols the user is actively tracking (not the same as holdings). Requires wiring up the existing `watchlist_router` on the backend side into a feature hook + table UI. Good candidate for reusing `StockCard` + scoring overlay from Phase 6.2.
+- [x] ~~**Watchlist page.**~~ Shipped 2026-04-17: `/watchlist` with add/remove + inline backfill, ScoreRing + SignalBadges overlay from `GET /watchlist/analysis/ranked`, "Watch" toggle on stock detail, Sidebar + command-palette entries.
 
 ## UI — Navigation
 

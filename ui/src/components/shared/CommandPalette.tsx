@@ -5,7 +5,9 @@ import {
   LineChart,
   ListOrdered,
   MessageSquare,
+  Plus,
   Settings as SettingsIcon,
+  Star,
 } from 'lucide-react';
 import {
   CommandDialog,
@@ -21,6 +23,8 @@ import { useStocks } from '@/features/stocks/useStocks';
 const NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/stocks', label: 'Stocks', icon: LineChart },
+  { to: '/stocks/manage', label: 'Add / backfill symbols', icon: Plus },
+  { to: '/watchlist', label: 'Watchlist', icon: Star },
   { to: '/recommendations', label: 'Recommendations', icon: ListOrdered },
   { to: '/portfolio', label: 'Portfolio', icon: Briefcase },
   { to: '/chat', label: 'Chat', icon: MessageSquare },

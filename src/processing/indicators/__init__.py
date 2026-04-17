@@ -1,5 +1,7 @@
 """Pure indicator functions — no I/O, deterministic on input."""
 
+from src.processing.indicators.bollinger import bandwidth, bollinger_bands, percent_b
+from src.processing.indicators.macd import detect_macd_crossover, macd
 from src.processing.indicators.momentum import period_return, rsi
 from src.processing.indicators.moving_averages import (
     classify_alignment,
@@ -20,14 +22,19 @@ from src.processing.indicators.volume import average_volume, obv, volume_ratio
 __all__ = [
     "atr",
     "average_volume",
+    "bandwidth",
+    "bollinger_bands",
     "classify_alignment",
     "classify_slope",
     "detect_crossover",
+    "detect_macd_crossover",
     "distance_pct",
     "ema",
     "is_near",
     "latest_or_nan",
+    "macd",
     "obv",
+    "percent_b",
     "period_return",
     "price_to_ma_pct",
     "rolling_std",

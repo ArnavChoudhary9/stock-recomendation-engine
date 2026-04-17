@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from datetime import date as DateType
 from datetime import timedelta
+from datetime import datetime, UTC
 
 from fastapi import APIRouter, Depends, Query, status
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.api.dependencies import get_data_service, get_repo
 from src.api.errors import bad_request, not_found
@@ -41,6 +42,47 @@ class RefreshResult(BaseModel):
 
     symbol: str
     bars_written: int
+
+
+class BackfillRequest(BaseModel):
+    """Body schema for POST /stocks/backfill.
+
+    Either ``start_date`` or ``days`` selects the history window. If both are
+    omitted, the config's ``backfill_days`` is used. If both are supplied,
+    ``start_date`` wins.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    symbols: list[str] = Field(..., min_length=1, max_length=20)
+    start_date: DateType | None = Field(
+        default=None,
+        description="Inclusive start date — pulls bars from this date up to today.",
+    )
+    days: int | None = Field(
+        default=None, gt=0, le=365 * 10,
+        description="Alternative to start_date: pull the last N days of history.",
+    )
+    force: bool = Field(
+        default=False,
+        description="Ignored when start_date/days are given. Otherwise forces a full "
+                    "config.backfill_days window even if newer data exists.",
+    )
+
+    @field_validator("symbols")
+    @classmethod
+    def _upper_symbols(cls, v: list[str]) -> list[str]:
+        return [s.strip().upper() for s in v if s.strip()]
+
+
+class BackfillResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    written: dict[str, int] = Field(
+        ..., description="Per-symbol bar count written this call (0 = empty/failed)"
+    )
+    total_bars: int = Field(..., ge=0)
+    failed: list[str] = Field(default_factory=list)
 
 
 @router.get("", response_model=PaginatedResponse[StockInfo])
@@ -126,3 +168,44 @@ async def refresh_stock(
     except DataProviderError as e:
         raise bad_request(f"provider refresh failed: {e}", symbol=sym) from e
     return APIResponse(data=RefreshResult(symbol=sym, bars_written=written))
+
+
+@router.post(
+    "/backfill",
+    response_model=APIResponse[BackfillResult],
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def backfill_stocks(
+    body: BackfillRequest,
+    data_service: DataService = Depends(get_data_service),
+) -> APIResponse[BackfillResult]:
+    """Pull OHLCV + fundamentals for a batch of symbols, optionally from a target date.
+
+    Inline execution (no background task) because the caller usually wants the
+    per-symbol bar counts back. Rate-limiting lives in the provider, so up to
+    the 20-symbol cap this typically finishes within a single request window.
+    Use the ``scripts/backfill.py`` CLI for larger batches.
+    """
+    today = datetime.now(UTC).date()
+    start: DateType | None = body.start_date
+    if start is None and body.days is not None:
+        start = today - timedelta(days=body.days)
+
+    written: dict[str, int] = {}
+    for sym in body.symbols:
+        try:
+            if start is not None:
+                written[sym] = await data_service.backfill_from(sym, start)
+            else:
+                written[sym] = await data_service.refresh_symbol(sym, refresh=body.force)
+        except DataProviderError:
+            written[sym] = 0
+
+    failed = [s for s, n in written.items() if n == 0]
+    return APIResponse(
+        data=BackfillResult(
+            written=written,
+            total_bars=sum(written.values()),
+            failed=failed,
+        )
+    )

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ArrowDown, ArrowUp, ArrowUpDown, LineChart, Search, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, LineChart, Plus, Search, X } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ErrorState } from '@/components/shared/ErrorState';
@@ -87,6 +87,13 @@ export function Stocks() {
           data
             ? `${filtered.length} of ${data.pagination.total} tracked stocks`
             : 'Browse and filter tracked NSE/BSE stocks.'
+        }
+        actions={
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/stocks/manage">
+              <Plus className="size-4" /> Add / backfill
+            </Link>
+          </Button>
         }
       />
 

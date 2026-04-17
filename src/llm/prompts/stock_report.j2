@@ -1,6 +1,6 @@
 {# User prompt body for stock report generation.
    Variables: analysis (StockAnalysis), news (NewsBundle).
-   The system message (role + JSON schema) is owned by LLMService. #}
+   The system message (role + JSON schema) lives in stock_report_system.j2. #}
 Symbol: {{ analysis.symbol }}
 Analysis timestamp: {{ analysis.timestamp.isoformat() }}
 Last close: Rs. {{ "%.2f"|format(analysis.features.last_close) }}
@@ -17,9 +17,12 @@ Rationale (deterministic): {{ analysis.recommendation_rationale }}
 - Volatility: {{ "%.3f"|format(analysis.sub_scores.volatility) }}
 - Fundamental: {{ "%.3f"|format(analysis.sub_scores.fundamental) }}
 - Support / resistance: {{ "%.3f"|format(analysis.sub_scores.support_resistance) }}
+- Trend-following (MACD): {{ "%.3f"|format(analysis.sub_scores.trend_following) }}
+- Mean-reversion (Bollinger): {{ "%.3f"|format(analysis.sub_scores.mean_reversion) }}
 
 ### Moving averages
 - SMA20 / SMA50 / SMA200: {{ "%.2f"|format(analysis.moving_averages.sma_20) }} / {{ "%.2f"|format(analysis.moving_averages.sma_50) }} / {{ "%.2f"|format(analysis.moving_averages.sma_200) }}
+- EMA12 / EMA26: {{ "%.2f"|format(analysis.moving_averages.ema_12) }} / {{ "%.2f"|format(analysis.moving_averages.ema_26) }}
 - Alignment: {{ analysis.moving_averages.alignment }}
 - SMA50 slope: {{ analysis.moving_averages.sma50_slope }}; SMA200 slope: {{ analysis.moving_averages.sma200_slope }}
 - Price vs SMA20 / SMA50 / SMA200: {{ "%+.2f"|format(analysis.moving_averages.price_to_sma20_pct) }}% / {{ "%+.2f"|format(analysis.moving_averages.price_to_sma50_pct) }}% / {{ "%+.2f"|format(analysis.moving_averages.price_to_sma200_pct) }}%
@@ -46,6 +49,28 @@ Rationale (deterministic): {{ analysis.recommendation_rationale }}
 - 52w high: {{ "%.2f"|format(analysis.features.support_resistance.high_52w) }} ({{ "%+.2f"|format(analysis.features.support_resistance.distance_to_52w_high_pct) }}%)
 - 52w low: {{ "%.2f"|format(analysis.features.support_resistance.low_52w) }} ({{ "%+.2f"|format(analysis.features.support_resistance.distance_to_52w_low_pct) }}%)
 - Near 52w high: {{ analysis.features.support_resistance.near_52w_high }}; near 52w low: {{ analysis.features.support_resistance.near_52w_low }}
+
+### MACD (12/26/9)
+{%- if analysis.features.macd %}
+- MACD line / signal / histogram: {{ "%.3f"|format(analysis.features.macd.macd_line) }} / {{ "%.3f"|format(analysis.features.macd.signal_line) }} / {{ "%+.3f"|format(analysis.features.macd.histogram) }}
+- Histogram sign: {{ "positive (bullish momentum)" if analysis.features.macd.histogram > 0 else ("negative (bearish momentum)" if analysis.features.macd.histogram < 0 else "flat") }}
+{%- if analysis.features.macd.crossover %}
+- Recent signal-line crossover: {{ analysis.features.macd.crossover }} ({{ analysis.features.macd.crossover_days_ago }} day(s) ago)
+{%- else %}
+- Recent signal-line crossover: none
+{%- endif %}
+{%- else %}
+- Insufficient history — MACD not computed.
+{%- endif %}
+
+### Bollinger Bands (20, 2σ)
+{%- if analysis.features.bollinger %}
+- Upper / middle / lower: {{ "%.2f"|format(analysis.features.bollinger.upper) }} / {{ "%.2f"|format(analysis.features.bollinger.middle) }} / {{ "%.2f"|format(analysis.features.bollinger.lower) }}
+- %B (price position inside bands, 0 = lower, 1 = upper): {{ "%.2f"|format(analysis.features.bollinger.percent_b) }}
+- Bandwidth: {{ "%.2f"|format(analysis.features.bollinger.bandwidth * 100) }}% ({{ "squeeze" if analysis.features.bollinger.squeeze else "normal" }})
+{%- else %}
+- Insufficient history — Bollinger Bands not computed.
+{%- endif %}
 
 ### Fundamentals
 - PE: {{ analysis.features.fundamentals.pe if analysis.features.fundamentals.pe is not none else "N/A" }}

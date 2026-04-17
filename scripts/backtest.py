@@ -28,15 +28,36 @@ from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.config import CONFIG_DIR, load_data_config, load_processing_config
+from src.config import (
+    CONFIG_DIR,
+    IndicatorPeriods,
+    ScoringConfig,
+    ScoringWeights,
+    SignalThresholds,
+    load_data_config,
+    load_processing_config,
+    load_yaml,
+)
 from src.data.providers.yahoo import YahooFinanceProvider
 from src.data.repositories.sqlite import SQLiteStockRepository
 from src.data.service import DataService
 from tests.backtesting.harness import (
     DEFAULT_BENCHMARK,
+    export_portfolio_csv,
+    format_portfolio,
     format_report,
     run_backtest,
+    simulate_portfolio,
 )
+
+
+def _load_config_file(path: Path) -> ScoringConfig:
+    raw = load_yaml(path)
+    return ScoringConfig(
+        periods=IndicatorPeriods.model_validate(raw.get("features", {})),
+        weights=ScoringWeights.model_validate(raw.get("scoring", {}).get("weights", {})),
+        signals=SignalThresholds.model_validate(raw.get("signals", {})),
+    )
 
 log = logging.getLogger("backtest")
 
@@ -83,10 +104,20 @@ async def main() -> int:
     parser.add_argument("--history-days", type=int, default=5 * 365,
                         help="Max calendar days of history to pull per symbol")
     parser.add_argument("--top-n", type=int, default=10,
-                        help="Number of top/bottom signals to show in the report")
+                        help="Top-N for signal table; also portfolio size when --simulate")
     parser.add_argument("--verbose", "-v", action="store_true", help="Enable DEBUG logging")
     parser.add_argument("--auto-fetch-benchmark", action="store_true",
                         help="If benchmark has no stored data, fetch it via Yahoo before running")
+    parser.add_argument("--simulate", action="store_true",
+                        help="Run the equal-weight top-N portfolio simulation vs the benchmark")
+    parser.add_argument("--rebalance-days", type=int, default=20,
+                        help="Minimum days between rebalances in --simulate mode")
+    parser.add_argument("--transaction-cost-bps", type=float, default=0.0,
+                        help="Per-side transaction cost in basis points (applied on turnover)")
+    parser.add_argument("--export-csv", type=str, default=None,
+                        help="Write the portfolio time-series to this CSV path (requires --simulate)")
+    parser.add_argument("--config", type=str, default=None,
+                        help="Path to an alternative processing.yaml to use for scoring")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -99,7 +130,9 @@ async def main() -> int:
              len(symbols), args.benchmark, args.forward_days, args.step_days)
 
     data_cfg = load_data_config()
-    scoring_cfg = load_processing_config()
+    scoring_cfg = (
+        _load_config_file(Path(args.config)) if args.config else load_processing_config()
+    )
     repo = SQLiteStockRepository(data_cfg.storage.path, wal_mode=data_cfg.storage.wal_mode)
     await repo.init()
     try:
@@ -126,6 +159,21 @@ async def main() -> int:
         await repo.close()
 
     print(format_report(report, top_n_signals=args.top_n))
+
+    if args.simulate:
+        sim = simulate_portfolio(
+            report.observations,
+            top_n=args.top_n,
+            rebalance_days=args.rebalance_days,
+            transaction_cost_bps=args.transaction_cost_bps,
+        )
+        print(format_portfolio(sim))
+        if args.export_csv:
+            export_portfolio_csv(sim, Path(args.export_csv))
+            log.info("portfolio time-series written to %s", args.export_csv)
+    elif args.export_csv:
+        log.warning("--export-csv ignored without --simulate")
+
     return 0
 
 

@@ -25,8 +25,16 @@ export const router = createBrowserRouter([
       { index: true, element: <Dashboard /> },
       { path: 'stocks', element: <Stocks /> },
       {
+        path: 'stocks/manage',
+        lazy: lazyRoute(() => import('@/routes/ManageStocks'), 'ManageStocks'),
+      },
+      {
         path: 'stocks/:symbol',
         lazy: lazyRoute(() => import('@/routes/StockDetail'), 'StockDetail'),
+      },
+      {
+        path: 'watchlist',
+        lazy: lazyRoute(() => import('@/routes/Watchlist'), 'Watchlist'),
       },
       {
         path: 'recommendations',
@@ -54,6 +62,10 @@ export const router = createBrowserRouter([
       {
         path: 'settings',
         lazy: lazyRoute(() => import('@/routes/Settings'), 'Settings'),
+      },
+      {
+        path: 'help',
+        lazy: lazyRoute(() => import('@/routes/Help'), 'Help'),
       },
       { path: '404', element: <NotFound /> },
       { path: '*', element: <Navigate to="/404" replace /> },

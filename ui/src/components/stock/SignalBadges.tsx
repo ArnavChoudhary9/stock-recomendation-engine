@@ -19,6 +19,35 @@ const TONE: Record<string, 'success' | 'destructive' | 'warning' | 'secondary'> 
   volume_spike: 'secondary',
   near_52w_high: 'success',
   near_52w_low: 'destructive',
+  macd_bullish_cross: 'success',
+  macd_bearish_cross: 'destructive',
+  macd_positive_histogram: 'success',
+  bb_squeeze: 'warning',
+  bb_breakout_upper: 'success',
+  bb_breakout_lower: 'destructive',
+};
+
+// Custom display labels where our `titleCase` helper drops case on acronyms.
+// e.g. `ma_bullish_stack` → default "Ma Bullish Stack"; we want "MA Bullish Stack".
+const LABEL_OVERRIDE: Record<string, string> = {
+  ma_bullish_stack: 'MA Bullish Stack',
+  ma_bearish_stack: 'MA Bearish Stack',
+  price_above_200sma: 'Price > SMA 200',
+  price_below_200sma: 'Price < SMA 200',
+  near_52w_high: 'Near 52w High',
+  near_52w_low: 'Near 52w Low',
+  golden_cross: 'Golden Cross',
+  death_cross: 'Death Cross',
+  macd_bullish_cross: 'MACD Bullish Cross',
+  macd_bearish_cross: 'MACD Bearish Cross',
+  macd_positive_histogram: 'MACD Histogram +',
+  bb_squeeze: 'BB Squeeze',
+  bb_breakout_upper: 'BB Breakout ↑',
+  bb_breakout_lower: 'BB Breakout ↓',
+  rsi_overbought: 'RSI Overbought',
+  rsi_oversold: 'RSI Oversold',
+  momentum_strong: 'Momentum Strong',
+  volume_spike: 'Volume Spike',
 };
 
 interface SignalBadgesProps {
@@ -52,7 +81,7 @@ export function SignalBadges({ signals, max = 4, className }: SignalBadgesProps)
     <div className={cn('flex flex-wrap gap-1.5', className)}>
       {shown.map((key) => (
         <Badge key={key} variant={TONE[key] ?? 'secondary'}>
-          {titleCase(key)}
+          {LABEL_OVERRIDE[key] ?? titleCase(key)}
         </Badge>
       ))}
       {rest > 0 && <Badge variant="outline">+{rest}</Badge>}

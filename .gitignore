@@ -67,3 +67,6 @@ logs/
 # mypy / type checking
 .mypy_cache/
 .ruff_cache/
+
+# Optimisation runs
+runs/

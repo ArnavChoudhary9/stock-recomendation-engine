@@ -1,0 +1,23 @@
+{# Per-symbol context block appended to the chat system prompt.
+   Variables:
+     entries (list) — each item is either
+       {"symbol": str, "analysis": StockAnalysis, "signals_str": str}
+       or
+       {"symbol": str, "error": str}  (when no analysis is available) #}
+Context — latest deterministic analysis for the user's active symbols:
+{% for entry in entries -%}
+{%- if entry.analysis -%}
+- {{ entry.analysis.symbol }}: score={{ "%.2f"|format(entry.analysis.score) }}, reco={{ entry.analysis.recommendation }}, last_close={{ "%.2f"|format(entry.analysis.features.last_close) }}, rsi14={{ "%.0f"|format(entry.analysis.features.momentum.rsi_14) }}, 5d={{ "%+.1f"|format(entry.analysis.features.momentum.return_5d * 100) }}%, 20d={{ "%+.1f"|format(entry.analysis.features.momentum.return_20d * 100) }}%, ma_alignment={{ entry.analysis.moving_averages.alignment }}
+{%- if entry.analysis.features.macd -%}, macd_hist={{ "%+.3f"|format(entry.analysis.features.macd.histogram) }}
+{%- if entry.analysis.features.macd.crossover -%}, macd_cross={{ entry.analysis.features.macd.crossover }} ({{ entry.analysis.features.macd.crossover_days_ago }}d)
+{%- endif -%}
+{%- endif -%}
+{%- if entry.analysis.features.bollinger -%}, bb_percent_b={{ "%.2f"|format(entry.analysis.features.bollinger.percent_b) }}
+{%- if entry.analysis.features.bollinger.squeeze -%}, bb_squeeze=true
+{%- endif -%}
+{%- endif -%}
+, signals=[{{ entry.signals_str }}].
+{% else -%}
+- {{ entry.symbol }}: no analysis available ({{ entry.error }}).
+{% endif -%}
+{% endfor %}

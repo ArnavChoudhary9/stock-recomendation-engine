@@ -6,8 +6,18 @@ features:
   volatility_period: 20
   momentum_periods: [5, 10, 20]
   volume_avg_period: 20
+  # MACD
+  macd_fast: 12
+  macd_slow: 26
+  macd_signal: 9
+  # Bollinger Bands
+  bollinger_period: 20
+  bollinger_std_dev: 2.0
 
 scoring:
+  # Weights are normalised by their sum, so they don't have to add to 1.0.
+  # The two new weights default to 0 — bump them (and rebalance the rest) to
+  # let MACD / Bollinger influence the composite score.
   weights:
     moving_average: 0.25
     momentum: 0.20
@@ -15,6 +25,8 @@ scoring:
     volatility: 0.10
     fundamental: 0.20
     support_resistance: 0.10
+    trend_following: 0.00      # MACD sub-score
+    mean_reversion: 0.00       # Bollinger sub-score
 
 signals:
   rsi_overbought: 70
@@ -24,3 +36,7 @@ signals:
   crossover_lookback_days: 5
   ma_slope_period: 10
   ma_slope_flat_threshold: 0.005
+  # MACD + Bollinger thresholds
+  macd_crossover_lookback_days: 5
+  bollinger_squeeze_threshold: 0.04    # bandwidth below this = squeeze
+  bollinger_breakout_epsilon: 0.001    # tolerance when comparing price to band edge

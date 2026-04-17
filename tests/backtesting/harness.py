@@ -14,8 +14,9 @@ import logging
 import statistics
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from pathlib import Path
 
-from src.contracts import OHLCVRow, ScoringConfig
+from src.contracts import OHLCVRow, ScoringConfig, ScoringWeights, SubScores
 from src.data.repositories.base import StockRepository
 from src.processing.features import InsufficientDataError, compute_features
 from src.processing.scoring import compose_score, compute_sub_scores
@@ -135,6 +136,133 @@ def _quartile_stats(obs: list[Observation]) -> QuartileStats | None:
         std_return=statistics.pstdev(rets) if len(rets) > 1 else 0.0,
         count=len(scored),
     )
+
+
+@dataclass(frozen=True)
+class PrecomputedObservation:
+    """Walk-forward evaluation with weight-independent inputs pre-baked.
+
+    ``sub_scores`` and the forward/benchmark returns don't depend on
+    :class:`ScoringWeights`, so a single pre-compute pass can feed many
+    scoring trials via :func:`score_precomputed`.
+    """
+
+    symbol: str
+    eval_date: date
+    sub_scores: SubScores
+    close_at_eval: float
+    forward_return: float | None
+    benchmark_return: float | None
+
+
+def precompute_symbol(
+    symbol: str,
+    rows: list[OHLCVRow],
+    config: ScoringConfig,
+    benchmark: dict[date, float],
+    *,
+    min_history_bars: int,
+    step_days: int,
+    forward_days: int,
+) -> list[PrecomputedObservation]:
+    """Walk ``rows`` once and produce weight-independent observations.
+
+    Periods and signals from ``config`` are consumed by ``compute_features``;
+    ``config.weights`` is *not* used here — scoring happens later in
+    :func:`score_precomputed`.
+    """
+    out: list[PrecomputedObservation] = []
+    for i in range(min_history_bars, len(rows), step_days):
+        window = rows[: i + 1]
+        try:
+            features = compute_features(symbol, window, None, config.periods, config.signals)
+        except InsufficientDataError:
+            continue
+        sub = compute_sub_scores(features)
+        fwd = _forward_return(rows, i, forward_days)
+        bench = _benchmark_return(benchmark, rows[i].date, forward_days)
+        out.append(
+            PrecomputedObservation(
+                symbol=symbol,
+                eval_date=rows[i].date,
+                sub_scores=sub,
+                close_at_eval=rows[i].close,
+                forward_return=fwd,
+                benchmark_return=bench,
+            )
+        )
+    return out
+
+
+def score_precomputed(
+    precomputed: list[PrecomputedObservation],
+    weights: ScoringWeights,
+) -> list[Observation]:
+    """Apply ``weights`` to pre-computed sub-scores — the hot loop for optimizers."""
+    out: list[Observation] = []
+    for p in precomputed:
+        alpha = (
+            p.forward_return - p.benchmark_return
+            if p.forward_return is not None and p.benchmark_return is not None
+            else None
+        )
+        out.append(
+            Observation(
+                symbol=p.symbol,
+                eval_date=p.eval_date,
+                score=compose_score(p.sub_scores, weights),
+                close_at_eval=p.close_at_eval,
+                forward_return=p.forward_return,
+                benchmark_return=p.benchmark_return,
+                alpha=alpha,
+            )
+        )
+    return out
+
+
+async def precompute_all(
+    repo: StockRepository,
+    symbols: list[str],
+    config: ScoringConfig,
+    *,
+    benchmark_symbol: str = DEFAULT_BENCHMARK,
+    min_history_bars: int = 220,
+    step_days: int = 20,
+    forward_days: int = 20,
+    history_days: int = 5 * 365,
+) -> tuple[list[PrecomputedObservation], dict[str, int | str]]:
+    """Run the expensive walk-forward once. Returns (pre-observations, params dict)."""
+    end = date.today()
+    start = end - timedelta(days=history_days)
+    benchmark = await load_benchmark_series(repo, benchmark_symbol, days=history_days)
+    if not benchmark:
+        log.warning("no benchmark data for %s — alpha metrics will be None", benchmark_symbol)
+
+    pre: list[PrecomputedObservation] = []
+    for sym in symbols:
+        rows = await repo.get_ohlcv(sym, start, end)
+        if len(rows) < min_history_bars + forward_days:
+            log.info("skipping %s (%d bars, need %d)",
+                     sym, len(rows), min_history_bars + forward_days)
+            continue
+        obs = precompute_symbol(
+            sym, rows, config, benchmark,
+            min_history_bars=min_history_bars,
+            step_days=step_days,
+            forward_days=forward_days,
+        )
+        log.info("%s: %d precomputed observations", sym, len(obs))
+        pre.extend(obs)
+
+    params: dict[str, int | str] = {
+        "benchmark": benchmark_symbol,
+        "min_history_bars": min_history_bars,
+        "step_days": step_days,
+        "forward_days": forward_days,
+        "history_days": history_days,
+        "n_symbols": len(symbols),
+    }
+    return pre, params
 
 
 def evaluate_symbol(
@@ -397,3 +525,214 @@ def _fmt_obs_row(o: Observation) -> str:
         f"{o.symbol:<10}  {o.eval_date.isoformat():<12}  {o.score:>6.3f}  "
         f"{_fmt_pct(o.forward_return)}  {_fmt_pct(o.benchmark_return)}  {_fmt_pct(o.alpha)}"
     )
+
+
+# ---------------------------- Portfolio simulator ----------------------------
+
+
+@dataclass(frozen=True)
+class PortfolioStep:
+    """One rebalance-period snapshot."""
+
+    date: date
+    picks: list[str]
+    portfolio_return: float
+    benchmark_return: float | None
+    portfolio_value: float
+    benchmark_value: float
+
+
+@dataclass(frozen=True)
+class PortfolioResult:
+    """End-to-end portfolio simulation result."""
+
+    steps: list[PortfolioStep]
+    n_rebalances: int
+    portfolio_cagr: float
+    benchmark_cagr: float | None
+    total_return: float
+    benchmark_total_return: float | None
+    alpha_cagr: float | None  # portfolio_cagr - benchmark_cagr
+    sharpe: float | None
+    max_drawdown: float
+    avg_turnover: float  # mean fraction of portfolio replaced per rebalance
+
+
+def _period_years(steps: list[PortfolioStep]) -> float:
+    if len(steps) < 2:
+        return 0.0
+    days = (steps[-1].date - steps[0].date).days
+    return max(days / 365.25, 1e-9)
+
+
+def _cagr(final_value: float, start_value: float, years: float) -> float:
+    if years <= 0 or start_value <= 0 or final_value <= 0:
+        return 0.0
+    return (final_value / start_value) ** (1.0 / years) - 1.0
+
+
+def _max_drawdown(values: list[float]) -> float:
+    """Largest peak-to-trough drop expressed as a negative fraction."""
+    peak = values[0]
+    worst = 0.0
+    for v in values:
+        if v > peak:
+            peak = v
+        dd = v / peak - 1.0 if peak > 0 else 0.0
+        if dd < worst:
+            worst = dd
+    return worst
+
+
+def _sharpe_like(period_returns: list[float], periods_per_year: float) -> float | None:
+    """Annualised return/vol, no risk-free rate subtraction (personal-use proxy)."""
+    if len(period_returns) < 2:
+        return None
+    mu = statistics.fmean(period_returns)
+    sd = statistics.pstdev(period_returns)
+    if sd == 0:
+        return None
+    return (mu / sd) * (periods_per_year ** 0.5)
+
+
+def simulate_portfolio(
+    observations: list[Observation],
+    *,
+    top_n: int,
+    rebalance_days: int,
+    transaction_cost_bps: float = 0.0,
+) -> PortfolioResult:
+    """Simulate an equal-weight top-N portfolio over the walk-forward observations.
+
+    On each rebalance date (unique ``eval_date`` across observations), pick the
+    ``top_n`` symbols with the highest scores *that also have a forward return*,
+    equal-weight their forward returns, and compound the result. Benchmark uses
+    the mean benchmark return of the same picks (they share one NIFTY window).
+
+    ``transaction_cost_bps`` is applied symmetrically on turnover (e.g. 10 bps
+    per side → 20 bps on fully replaced positions). 0 by default.
+    """
+    by_date: dict[date, list[Observation]] = {}
+    for o in observations:
+        if o.forward_return is None:
+            continue
+        by_date.setdefault(o.eval_date, []).append(o)
+
+    sorted_dates = sorted(by_date)
+    if not sorted_dates:
+        return PortfolioResult(
+            steps=[], n_rebalances=0, portfolio_cagr=0.0, benchmark_cagr=None,
+            total_return=0.0, benchmark_total_return=None, alpha_cagr=None,
+            sharpe=None, max_drawdown=0.0, avg_turnover=0.0,
+        )
+
+    # Throttle rebalances: keep dates separated by at least ``rebalance_days``.
+    chosen: list[date] = [sorted_dates[0]]
+    for d in sorted_dates[1:]:
+        if (d - chosen[-1]).days >= rebalance_days:
+            chosen.append(d)
+
+    cost_per_side = transaction_cost_bps / 10_000.0
+    port_value = 1.0
+    bench_value = 1.0
+    prev_picks: set[str] = set()
+    steps: list[PortfolioStep] = []
+    period_returns: list[float] = []
+    turnovers: list[float] = []
+
+    for d in chosen:
+        bucket = sorted(by_date[d], key=lambda o: o.score, reverse=True)[:top_n]
+        if not bucket:
+            continue
+        picks = [o.symbol for o in bucket]
+        picks_set = set(picks)
+        turnover = (
+            len(picks_set.symmetric_difference(prev_picks)) / (2 * max(len(picks_set), 1))
+            if prev_picks else 1.0
+        )
+        gross_ret = statistics.fmean(o.forward_return for o in bucket if o.forward_return is not None)
+        net_ret = gross_ret - turnover * 2 * cost_per_side
+        port_value *= 1.0 + net_ret
+
+        bench_rets = [o.benchmark_return for o in bucket if o.benchmark_return is not None]
+        bench_ret = statistics.fmean(bench_rets) if bench_rets else None
+        if bench_ret is not None:
+            bench_value *= 1.0 + bench_ret
+
+        steps.append(PortfolioStep(
+            date=d, picks=picks, portfolio_return=net_ret,
+            benchmark_return=bench_ret,
+            portfolio_value=port_value, benchmark_value=bench_value,
+        ))
+        period_returns.append(net_ret)
+        turnovers.append(turnover)
+        prev_picks = picks_set
+
+    if not steps:
+        return PortfolioResult(
+            steps=[], n_rebalances=0, portfolio_cagr=0.0, benchmark_cagr=None,
+            total_return=0.0, benchmark_total_return=None, alpha_cagr=None,
+            sharpe=None, max_drawdown=0.0, avg_turnover=0.0,
+        )
+
+    years = _period_years(steps)
+    periods_per_year = len(steps) / years if years > 0 else 0.0
+    port_cagr = _cagr(steps[-1].portfolio_value, 1.0, years)
+
+    # Benchmark CAGR from the compounded bench series (some periods may be None).
+    bench_ret_series = [s.benchmark_return for s in steps if s.benchmark_return is not None]
+    bench_cagr = (
+        _cagr(steps[-1].benchmark_value, 1.0, years)
+        if bench_ret_series else None
+    )
+    alpha_cagr = port_cagr - bench_cagr if bench_cagr is not None else None
+    total_ret = steps[-1].portfolio_value - 1.0
+    bench_total = steps[-1].benchmark_value - 1.0 if bench_ret_series else None
+
+    return PortfolioResult(
+        steps=steps,
+        n_rebalances=len(steps),
+        portfolio_cagr=port_cagr,
+        benchmark_cagr=bench_cagr,
+        total_return=total_ret,
+        benchmark_total_return=bench_total,
+        alpha_cagr=alpha_cagr,
+        sharpe=_sharpe_like(period_returns, periods_per_year),
+        max_drawdown=_max_drawdown([s.portfolio_value for s in steps]),
+        avg_turnover=statistics.fmean(turnovers) if turnovers else 0.0,
+    )
+
+
+def format_portfolio(result: PortfolioResult) -> str:
+    lines = ["-" * 70, "PORTFOLIO SIMULATION", "-" * 70]
+    if result.n_rebalances == 0:
+        lines.append("no observations with forward returns — nothing to simulate")
+        return "\n".join(lines)
+    lines.append(f"Rebalances:             {result.n_rebalances}")
+    lines.append(f"Period:                 {result.steps[0].date} .. {result.steps[-1].date}")
+    lines.append(f"Final portfolio value:  {result.steps[-1].portfolio_value:.4f}  ({_fmt_pct(result.total_return)})")
+    if result.benchmark_total_return is not None:
+        lines.append(f"Final benchmark value:  {result.steps[-1].benchmark_value:.4f}  ({_fmt_pct(result.benchmark_total_return)})")
+    lines.append(f"Portfolio CAGR:         {_fmt_pct(result.portfolio_cagr)}")
+    if result.benchmark_cagr is not None:
+        lines.append(f"Benchmark CAGR:         {_fmt_pct(result.benchmark_cagr)}")
+    if result.alpha_cagr is not None:
+        lines.append(f"Alpha (CAGR diff):      {_fmt_pct(result.alpha_cagr)}")
+    if result.sharpe is not None:
+        lines.append(f"Sharpe-like:            {_fmt_float(result.sharpe)}")
+    lines.append(f"Max drawdown:           {_fmt_pct(result.max_drawdown)}")
+    lines.append(f"Avg turnover/rebalance: {_fmt_pct(result.avg_turnover)}")
+    return "\n".join(lines)
+
+
+def export_portfolio_csv(result: PortfolioResult, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = ["date,portfolio_value,benchmark_value,portfolio_return,benchmark_return,picks"]
+    for s in result.steps:
+        bench_ret = "" if s.benchmark_return is None else f"{s.benchmark_return:.6f}"
+        picks = "|".join(s.picks)
+        lines.append(
+            f"{s.date.isoformat()},{s.portfolio_value:.6f},{s.benchmark_value:.6f},"
+            f"{s.portfolio_return:.6f},{bench_ret},{picks}"
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")

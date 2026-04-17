@@ -116,6 +116,21 @@ class DataService:
         await self.get_fundamentals(symbol, refresh=True)
         return written
 
+    async def backfill_from(self, symbol: str, start: DateType) -> int:
+        """Backfill OHLCV for ``symbol`` starting at ``start`` up to today.
+
+        Useful for pulling deep history on a newly-added symbol, or extending
+        a previously narrow backfill to an earlier date. Also refreshes
+        fundamentals so the stock isn't left with stale metadata.
+        """
+        await self.ensure_stock(symbol)
+        end = _today()
+        if start > end:
+            return 0
+        written = await self._backfill(symbol, start, end)
+        await self.get_fundamentals(symbol, refresh=True)
+        return written
+
     async def refresh_many(self, symbols: list[str]) -> dict[str, int]:
         """Refresh a batch of symbols sequentially.
 

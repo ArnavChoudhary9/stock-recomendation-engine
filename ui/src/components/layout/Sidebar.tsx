@@ -3,8 +3,10 @@ import {
   LayoutDashboard,
   LineChart,
   ListOrdered,
+  Star,
   Briefcase,
   MessageSquare,
+  HelpCircle,
   Settings as SettingsIcon,
   TrendingUp,
 } from 'lucide-react';
@@ -13,9 +15,11 @@ import { cn } from '@/lib/utils/cn';
 const nav = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/stocks', label: 'Stocks', icon: LineChart },
+  { to: '/watchlist', label: 'Watchlist', icon: Star },
   { to: '/recommendations', label: 'Recommendations', icon: ListOrdered },
   { to: '/portfolio', label: 'Portfolio', icon: Briefcase },
   { to: '/chat', label: 'Chat', icon: MessageSquare },
+  { to: '/help', label: 'Help', icon: HelpCircle },
   { to: '/settings', label: 'Settings', icon: SettingsIcon },
 ];
 

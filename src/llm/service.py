@@ -16,9 +16,6 @@ import json
 import logging
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from pathlib import Path
-
-from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
 
 from src.config import LLMConfig
 from src.contracts import Article, NewsBundle, NewsReference, StockAnalysis, StockReport
@@ -32,11 +29,12 @@ from src.llm.providers.base import (
     LLMRateLimitError,
     LLMTimeoutError,
 )
+from src.llm.render import render
 
 log = logging.getLogger(__name__)
 
-PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
 STOCK_REPORT_TEMPLATE = "stock_report.j2"
+STOCK_REPORT_SYSTEM_TEMPLATE = "stock_report_system.j2"
 
 # Transient errors → retry the same model. Auth errors → don't retry; skip model entirely.
 _RETRYABLE = (LLMRateLimitError, LLMTimeoutError, LLMInvalidResponseError)
@@ -48,14 +46,12 @@ class LLMService:
     def __init__(self, provider: LLMProvider, config: LLMConfig) -> None:
         self.provider = provider
         self.config = config
-        self._env = Environment(
-            loader=FileSystemLoader(str(PROMPTS_DIR)),
-            autoescape=select_autoescape(disabled_extensions=("j2",)),
-            undefined=StrictUndefined,
-            trim_blocks=True,
-            lstrip_blocks=False,
+        # Rendered once per instance: the schema embedded in the system prompt
+        # only changes when StockReport does (i.e. at process start).
+        self._system_prompt = render(
+            STOCK_REPORT_SYSTEM_TEMPLATE,
+            schema_json=json.dumps(StockReport.model_json_schema(), indent=2),
         )
-        self._system_prompt = _build_system_prompt()
 
     async def generate_report(
         self, analysis: StockAnalysis, news: NewsBundle
@@ -127,8 +123,7 @@ class LLMService:
         raise LLMAllModelsFailedError(str(last)) from last
 
     def _render_prompt(self, analysis: StockAnalysis, news: NewsBundle) -> str:
-        template = self._env.get_template(STOCK_REPORT_TEMPLATE)
-        return template.render(analysis=analysis, news=news)
+        return render(STOCK_REPORT_TEMPLATE, analysis=analysis, news=news)
 
     async def stream_chat(
         self, messages: list[ChatMessage]
@@ -142,36 +137,6 @@ class LLMService:
             messages=messages, model=self.config.llm.model
         ):
             yield delta
-
-
-def _build_system_prompt() -> str:
-    """System prompt: role + JSON schema for :class:`StockReport` output."""
-    schema = StockReport.model_json_schema()
-    return (
-        "You are a financial analyst writing for a personal stock-intelligence "
-        "platform covering Indian equities (NSE/BSE). Your job is to explain the "
-        "quantitative analysis that is provided — never to modify the score or "
-        "add/remove stocks from the ranked universe.\n\n"
-        "Respond with a single JSON object matching this schema exactly. Output "
-        "JSON only, no markdown, no prose before or after:\n\n"
-        f"{json.dumps(schema, indent=2)}\n\n"
-        "Field rules:\n"
-        "- summary: 2-3 sentences grounded in the provided facts.\n"
-        "- insights: up to 5 concise bullish factors, one sentence each.\n"
-        "- risks: up to 5 concise risk factors, one sentence each.\n"
-        "- news_impact: 1-2 sentences describing how the recent news affects the outlook.\n"
-        "- confidence: float in [0, 1] reflecting how much the data supports a clear view.\n"
-        "- reasoning_chain: 3-5 short steps linking data points to conclusions.\n"
-        "- recommendation: your own BUY/HOLD/SELL call weighing news, momentum,\n"
-        "  and sentiment. You may agree or disagree with the deterministic\n"
-        "  recommendation shown in the user message.\n"
-        "- recommendation_rationale: 1-2 sentences. If you disagree with the\n"
-        "  deterministic call, explicitly state why.\n"
-        "- sources: return an empty array []. The service fills it from the\n"
-        "  provided article list — do not invent URLs.\n"
-        "- Leave `model_used` as null and `degraded` as false — service fills them.\n"
-        "- Never invent numbers or URLs. Use only facts present in the user message."
-    )
 
 
 def _sources_from_news(news: NewsBundle) -> list[NewsReference]:

@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowRight, ArrowUp, TrendingDown, TrendingUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { InfoTip } from '@/components/shared/InfoTip';
 import { cn } from '@/lib/utils/cn';
 import type { MovingAverages, Slope } from '@/lib/types';
 
@@ -20,7 +21,10 @@ export function MovingAveragesPanel({ ma, className }: MovingAveragesPanelProps)
     <Card className={className}>
       <CardHeader className="flex flex-row items-start justify-between space-y-0">
         <div>
-          <CardTitle className="text-base">Moving averages</CardTitle>
+          <CardTitle className="flex items-center gap-1.5 text-base">
+            Moving averages
+            <InfoTip indicator="sma" />
+          </CardTitle>
           <CardDescription>Alignment, crossover, and distance from price</CardDescription>
         </div>
         <div className="flex items-center gap-1.5">
@@ -29,13 +33,20 @@ export function MovingAveragesPanel({ ma, className }: MovingAveragesPanelProps)
             {ma.alignment === 'bearish' && <TrendingDown className="size-3" />}
             <span className="ml-1 capitalize">{ma.alignment}</span>
           </Badge>
+          <InfoTip indicator="ma_alignment" iconSize={12} />
           {ma.crossover && (
-            <Badge variant={ma.crossover === 'golden_cross' ? 'success' : 'destructive'}>
-              {ma.crossover === 'golden_cross' ? 'Golden cross' : 'Death cross'}
-              {ma.crossover_days_ago !== null && (
-                <span className="ml-1 opacity-80">· {ma.crossover_days_ago}d</span>
-              )}
-            </Badge>
+            <>
+              <Badge variant={ma.crossover === 'golden_cross' ? 'success' : 'destructive'}>
+                {ma.crossover === 'golden_cross' ? 'Golden cross' : 'Death cross'}
+                {ma.crossover_days_ago !== null && (
+                  <span className="ml-1 opacity-80">· {ma.crossover_days_ago}d</span>
+                )}
+              </Badge>
+              <InfoTip
+                indicator={ma.crossover === 'golden_cross' ? 'golden_cross' : 'death_cross'}
+                iconSize={12}
+              />
+            </>
           )}
         </div>
       </CardHeader>

@@ -14,8 +14,14 @@ export const endpoints = {
 
   stockAnalysis: (symbol: string) =>
     `${API_PREFIX}/stocks/${encodeURIComponent(symbol)}/analysis`,
+  stocksBackfill: `${API_PREFIX}/stocks/backfill`,
   recommendations: `${API_PREFIX}/recommendations`,
   recommendationsHistory: `${API_PREFIX}/recommendations/history`,
+
+  watchlist: `${API_PREFIX}/watchlist`,
+  watchlistItem: (symbol: string) =>
+    `${API_PREFIX}/watchlist/${encodeURIComponent(symbol)}`,
+  watchlistRanked: `${API_PREFIX}/watchlist/analysis/ranked`,
 
   stockNews: (symbol: string) => `${API_PREFIX}/stocks/${encodeURIComponent(symbol)}/news`,
 

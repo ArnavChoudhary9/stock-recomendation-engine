@@ -150,6 +150,25 @@ export interface SupportResistance {
   near_52w_low: boolean;
 }
 
+export type MACDCrossover = 'bullish' | 'bearish';
+
+export interface MACDFeatures {
+  macd_line: number;
+  signal_line: number;
+  histogram: number;
+  crossover: MACDCrossover | null;
+  crossover_days_ago: number | null;
+}
+
+export interface BollingerBands {
+  upper: number;
+  middle: number;
+  lower: number;
+  percent_b: number;
+  bandwidth: number;
+  squeeze: boolean;
+}
+
 export interface Features {
   symbol: string;
   as_of: string;
@@ -160,6 +179,8 @@ export interface Features {
   volatility: Volatility;
   fundamentals: FundamentalFeatures;
   support_resistance: SupportResistance;
+  macd: MACDFeatures | null;
+  bollinger: BollingerBands | null;
 }
 
 export interface SubScores {
@@ -169,6 +190,19 @@ export interface SubScores {
   volatility: number;
   fundamental: number;
   support_resistance: number;
+  trend_following: number;
+  mean_reversion: number;
+}
+
+export interface ScoringWeights {
+  moving_average: number;
+  momentum: number;
+  volume: number;
+  volatility: number;
+  fundamental: number;
+  support_resistance: number;
+  trend_following: number;
+  mean_reversion: number;
 }
 
 export interface AnalysisMetadata {
@@ -254,6 +288,34 @@ export interface PipelineRunResult {
   scheduled: boolean;
   symbols_count: number;
   message: string;
+}
+
+// ——— Watchlist ———
+
+export interface WatchlistItem {
+  symbol: string;
+  added_at: string;
+  notes: string | null;
+}
+
+export interface AddToWatchlistRequest {
+  symbol: string;
+  notes?: string | null;
+}
+
+// ——— Stocks backfill ———
+
+export interface BackfillRequest {
+  symbols: string[];
+  start_date?: string | null; // ISO YYYY-MM-DD
+  days?: number | null;
+  force?: boolean;
+}
+
+export interface BackfillResult {
+  written: Record<string, number>;
+  total_bars: number;
+  failed: string[];
 }
 
 // ——— Portfolio (Phase 4B — endpoints return 501 until then) ———

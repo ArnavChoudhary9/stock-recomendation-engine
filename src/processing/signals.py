@@ -68,4 +68,35 @@ def generate_signals(features: Features, thresholds: SignalThresholds) -> dict[s
     signals["near_52w_high"] = sr.near_52w_high
     signals["near_52w_low"] = sr.near_52w_low
 
+    # MACD crossovers (fires only within the configured lookback window).
+    if features.macd is not None:
+        in_macd_window = (
+            features.macd.crossover is not None
+            and features.macd.crossover_days_ago is not None
+            and features.macd.crossover_days_ago <= thresholds.macd_crossover_lookback_days
+        )
+        signals["macd_bullish_cross"] = (
+            in_macd_window and features.macd.crossover == "bullish"
+        )
+        signals["macd_bearish_cross"] = (
+            in_macd_window and features.macd.crossover == "bearish"
+        )
+        signals["macd_positive_histogram"] = features.macd.histogram > 0
+    else:
+        signals["macd_bullish_cross"] = False
+        signals["macd_bearish_cross"] = False
+        signals["macd_positive_histogram"] = False
+
+    # Bollinger regime.
+    if features.bollinger is not None:
+        bb = features.bollinger
+        eps = thresholds.bollinger_breakout_epsilon
+        signals["bb_squeeze"] = bb.squeeze
+        signals["bb_breakout_upper"] = features.last_close >= bb.upper * (1 - eps)
+        signals["bb_breakout_lower"] = features.last_close <= bb.lower * (1 + eps)
+    else:
+        signals["bb_squeeze"] = False
+        signals["bb_breakout_upper"] = False
+        signals["bb_breakout_lower"] = False
+
     return signals

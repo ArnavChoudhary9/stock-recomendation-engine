@@ -17,7 +17,14 @@ module.exports = {
     {
       // shadcn primitives co-locate the *Variants helper with the component;
       // providers co-locate their context hook. Both are idiomatic.
-      files: ['src/components/ui/**/*.tsx', 'src/providers/**/*.tsx'],
+      // Chart components co-locate small helpers (defaults, overlay keys)
+      // with their component; shadcn primitives co-locate the *Variants helper;
+      // providers co-locate their context hook. All idiomatic.
+      files: [
+        'src/components/ui/**/*.tsx',
+        'src/components/charts/**/*.tsx',
+        'src/providers/**/*.tsx',
+      ],
       rules: { 'react-refresh/only-export-components': 'off' },
     },
   ],

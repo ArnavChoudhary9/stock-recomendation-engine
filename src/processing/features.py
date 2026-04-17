@@ -13,10 +13,12 @@ import numpy as np
 import pandas as pd
 
 from src.contracts import (
+    BollingerBands,
     Features,
     FundamentalFeatures,
     Fundamentals,
     IndicatorPeriods,
+    MACDFeatures,
     MarketCapTier,
     Momentum,
     MovingAverages,
@@ -30,14 +32,19 @@ from src.contracts import (
 from src.processing.indicators import (
     atr,
     average_volume,
+    bandwidth,
+    bollinger_bands,
     classify_alignment,
     classify_slope,
     detect_crossover,
+    detect_macd_crossover,
     distance_pct,
     ema,
     is_near,
     latest_or_nan,
+    macd,
     obv,
+    percent_b,
     period_return,
     price_to_ma_pct,
     rolling_std,
@@ -193,6 +200,64 @@ def _fundamentals(
     )
 
 
+def _macd(
+    closes: pd.Series, periods: IndicatorPeriods, thresholds: SignalThresholds
+) -> MACDFeatures | None:
+    """Compute MACD snapshot. Returns None if not enough bars yet."""
+    required = periods.macd_slow + periods.macd_signal
+    if len(closes) < required:
+        return None
+    macd_line, signal_line, histogram = macd(
+        closes, periods.macd_fast, periods.macd_slow, periods.macd_signal
+    )
+    line_v = latest_or_nan(macd_line)
+    signal_v = latest_or_nan(signal_line)
+    hist_v = latest_or_nan(histogram)
+    if math.isnan(line_v) or math.isnan(signal_v) or math.isnan(hist_v):
+        return None
+    cross, days_ago = detect_macd_crossover(
+        macd_line, signal_line, thresholds.macd_crossover_lookback_days
+    )
+    return MACDFeatures(
+        macd_line=line_v,
+        signal_line=signal_v,
+        histogram=hist_v,
+        crossover=cross,
+        crossover_days_ago=days_ago,
+    )
+
+
+def _bollinger(
+    closes: pd.Series,
+    last_close: float,
+    periods: IndicatorPeriods,
+    thresholds: SignalThresholds,
+) -> BollingerBands | None:
+    """Compute Bollinger Bands snapshot. Returns None if not enough bars yet."""
+    if len(closes) < periods.bollinger_period:
+        return None
+    upper_s, middle_s, lower_s = bollinger_bands(
+        closes, periods.bollinger_period, periods.bollinger_std_dev
+    )
+    upper_v = latest_or_nan(upper_s)
+    middle_v = latest_or_nan(middle_s)
+    lower_v = latest_or_nan(lower_s)
+    if math.isnan(upper_v) or math.isnan(middle_v) or math.isnan(lower_v):
+        return None
+    bw = bandwidth(upper_v, middle_v, lower_v)
+    pb = percent_b(last_close, upper_v, lower_v)
+    if math.isnan(bw) or math.isnan(pb):
+        return None
+    return BollingerBands(
+        upper=upper_v,
+        middle=middle_v,
+        lower=lower_v,
+        percent_b=pb,
+        bandwidth=bw,
+        squeeze=bw < thresholds.bollinger_squeeze_threshold,
+    )
+
+
 def _support_resistance(
     df: pd.DataFrame, last_close: float, thresholds: SignalThresholds
 ) -> SupportResistance:
@@ -240,4 +305,6 @@ def compute_features(
         volatility=_volatility(df, periods),
         fundamentals=_fundamentals(fundamentals),
         support_resistance=_support_resistance(df, last_close, thresholds),
+        macd=_macd(closes, periods, thresholds),
+        bollinger=_bollinger(closes, last_close, periods, thresholds),
     )

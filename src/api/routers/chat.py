@@ -28,6 +28,7 @@ from src.llm.providers.base import (
     LLMRateLimitError,
     LLMTimeoutError,
 )
+from src.llm.render import render
 from src.llm.service import LLMService
 from src.processing.service import DefaultProcessingService, ProcessingError
 
@@ -35,13 +36,8 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 
 log = logging.getLogger(__name__)
 
-_BASE_SYSTEM_PROMPT = (
-    "You are a concise financial analyst for a personal Indian-equities "
-    "stock-intelligence platform (NSE/BSE). You help the user reason about "
-    "the deterministic scoring output, market signals, and news. Answer in "
-    "short paragraphs with clear, numbered steps when useful. Never invent "
-    "prices, scores, or URLs — if a fact isn't in the provided context, say so."
-)
+CHAT_SYSTEM_TEMPLATE = "chat_system.j2"
+CHAT_CONTEXT_TEMPLATE = "chat_context.j2"
 
 
 @router.post("/stream")
@@ -51,10 +47,13 @@ async def chat_stream(
     processing: DefaultProcessingService = Depends(get_processing_service),
 ) -> StreamingResponse:
     """Stream NDJSON deltas back to the client."""
-    context_block = await _build_context_block(payload.context_symbols, processing)
-    system_prompt = _BASE_SYSTEM_PROMPT
-    if context_block:
-        system_prompt = f"{_BASE_SYSTEM_PROMPT}\n\n{context_block}"
+    entries = await _collect_context_entries(payload.context_symbols, processing)
+    system_prompt = render(CHAT_SYSTEM_TEMPLATE).strip()
+    if entries:
+        system_prompt = (
+            f"{system_prompt}\n\n"
+            f"{render(CHAT_CONTEXT_TEMPLATE, entries=entries).strip()}"
+        )
 
     messages: list[ChatMessage] = [ChatMessage(role="system", content=system_prompt)]
     messages.extend(ChatMessage(role=m.role, content=m.content) for m in payload.messages)
@@ -87,39 +86,40 @@ async def chat_stream(
     )
 
 
-async def _build_context_block(
+async def _collect_context_entries(
     symbols: list[str], processing: DefaultProcessingService
-) -> str:
-    """Render a compact 'current state' block for each requested symbol.
+) -> list[dict[str, object]]:
+    """Collect one context entry per requested symbol, keeping order.
 
-    Missing or failing symbols are listed inline so the model knows the user
-    asked about them but no data is available.
+    Successful lookups contribute ``{"symbol", "analysis", "signals_str"}``;
+    failures contribute ``{"symbol", "error"}``. The chat_context.j2 template
+    branches on which key is present so both cases render inline.
     """
-    if not symbols:
-        return ""
-    lines: list[str] = ["Context — latest deterministic analysis for the user's active symbols:"]
+    entries: list[dict[str, object]] = []
     for sym in symbols:
         try:
             analysis = await processing.analyze_stock(sym)
         except ProcessingError as e:
             log.debug("chat context missing for %s: %s", sym, e)
-            lines.append(f"- {sym}: no analysis available ({e}).")
+            # Keep both keys present so StrictUndefined in Jinja doesn't trip.
+            entries.append(
+                {"symbol": sym, "analysis": None, "error": str(e), "signals_str": ""}
+            )
             continue
-        lines.append(_format_analysis_line(analysis))
-    return "\n".join(lines)
+        entries.append(
+            {
+                "symbol": sym,
+                "analysis": analysis,
+                "error": None,
+                "signals_str": _active_signals_str(analysis),
+            }
+        )
+    return entries
 
 
-def _format_analysis_line(a: StockAnalysis) -> str:
-    ma = a.moving_averages
-    mom = a.features.momentum
-    active_signals = [k for k, v in a.signals.items() if v]
-    signals_str = ", ".join(active_signals) if active_signals else "none"
-    return (
-        f"- {a.symbol}: score={a.score:.2f}, reco={a.recommendation}, "
-        f"last_close={a.features.last_close:.2f}, rsi14={mom.rsi_14:.0f}, "
-        f"5d={mom.return_5d * 100:+.1f}%, 20d={mom.return_20d * 100:+.1f}%, "
-        f"ma_alignment={ma.alignment}, signals=[{signals_str}]."
-    )
+def _active_signals_str(a: StockAnalysis) -> str:
+    active = [k for k, v in a.signals.items() if v]
+    return ", ".join(active) if active else "none"
 
 
 def _frame(obj: dict[str, object]) -> bytes:

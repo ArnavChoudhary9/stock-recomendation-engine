@@ -12,8 +12,10 @@ import math
 from typing import Final
 
 from src.contracts import (
+    BollingerBands,
     Features,
     FundamentalFeatures,
+    MACDFeatures,
     Momentum,
     MovingAverages,
     Recommendation,
@@ -24,7 +26,9 @@ from src.contracts import (
     VolumeFeatures,
 )
 
-SCORING_VERSION: Final[str] = "1.0.0"
+# Bumped to 1.1.0 — MACD + Bollinger sub-scores added. Weights default 0 so
+# existing scores don't drift, but config_hash changes when users opt in.
+SCORING_VERSION: Final[str] = "1.1.0"
 _NEUTRAL: Final[float] = 0.5
 
 
@@ -138,6 +142,48 @@ def support_resistance_sub_score(sr: SupportResistance) -> float:
     return _clamp(base)
 
 
+def trend_following_sub_score(macd: MACDFeatures | None) -> float:
+    """MACD-based trend score.
+
+    Positive histogram = short-term trend accelerating; recent bullish crossover
+    adds a bonus, bearish subtracts. Magnitude is normalised by ``abs(macd_line)``
+    to make histograms comparable across price levels.
+    """
+    if macd is None:
+        return _NEUTRAL
+    # Base score from histogram sign + magnitude. Normalise by |macd_line| so the
+    # range is roughly [-1, +1] before we recentre around 0.5.
+    denom = max(abs(macd.macd_line), 1e-9)
+    normalized = max(-1.0, min(1.0, macd.histogram / denom))
+    base = 0.5 + 0.35 * normalized
+
+    if macd.crossover == "bullish" and (macd.crossover_days_ago or 0) <= 5:
+        base += 0.15
+    elif macd.crossover == "bearish" and (macd.crossover_days_ago or 0) <= 5:
+        base -= 0.15
+
+    return _clamp(base)
+
+
+def mean_reversion_sub_score(bb: BollingerBands | None) -> float:
+    """Bollinger-position-based mean-reversion score.
+
+    Price near the lower band = oversold = opportunity (high score).
+    Price near the upper band = stretched = lower score.
+    During a squeeze (low bandwidth), tilt toward neutral since direction is
+    unclear and the breakout signal is separate.
+    """
+    if bb is None:
+        return _NEUTRAL
+    # percent_b: 0 = at lower band, 1 = at upper. Invert for mean-reversion.
+    pb = max(0.0, min(1.0, bb.percent_b))
+    base = 1.0 - pb
+    if bb.squeeze:
+        # Pull toward neutral — squeeze is direction-agnostic by itself.
+        base = 0.5 + 0.5 * (base - 0.5)
+    return _clamp(base)
+
+
 def compute_sub_scores(features: Features) -> SubScores:
     """Produce every sub-score for a feature bundle. Pure function."""
     return SubScores(
@@ -147,6 +193,8 @@ def compute_sub_scores(features: Features) -> SubScores:
         volatility=volatility_sub_score(features.volatility, features.last_close),
         fundamental=fundamental_sub_score(features.fundamentals),
         support_resistance=support_resistance_sub_score(features.support_resistance),
+        trend_following=trend_following_sub_score(features.macd),
+        mean_reversion=mean_reversion_sub_score(features.bollinger),
     )
 
 
@@ -162,6 +210,8 @@ def compose_score(sub_scores: SubScores, weights: ScoringWeights) -> float:
         + sub_scores.volatility * weights.volatility
         + sub_scores.fundamental * weights.fundamental
         + sub_scores.support_resistance * weights.support_resistance
+        + sub_scores.trend_following * weights.trend_following
+        + sub_scores.mean_reversion * weights.mean_reversion
     )
     return _clamp(weighted_sum / total)
 
