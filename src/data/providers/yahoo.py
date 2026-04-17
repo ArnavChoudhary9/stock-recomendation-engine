@@ -58,7 +58,8 @@ class YahooFinanceProvider(DataProvider):
 
     def _yahoo_ticker(self, symbol: str, exchange: str | None = None) -> str:
         sym = symbol.strip().upper()
-        if "." in sym:
+        # Index tickers (e.g. ^NSEI, ^BSESN) and already-qualified tickers pass through.
+        if sym.startswith("^") or "." in sym:
             return sym
         suffix = _SUFFIX.get((exchange or self.default_exchange).upper(), ".NS")
         return f"{sym}{suffix}"

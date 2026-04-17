@@ -92,16 +92,23 @@ class DataService:
         await self.repo.upsert_stock(info)
         return info
 
-    async def refresh_symbol(self, symbol: str) -> int:
-        """Fetch OHLCV + fundamentals for a single symbol. Returns bars written."""
+    async def refresh_symbol(self, symbol: str, *, refresh: bool = False) -> int:
+        """Fetch OHLCV + fundamentals for a single symbol. Returns bars written.
+
+        ``refresh=True`` forces a full ``backfill_days`` window regardless of
+        what's already stored — useful for extending a previously narrow backfill.
+        """
         await self.ensure_stock(symbol)
         end = _today()
-        latest = await self.repo.get_latest_date(symbol)
-        start = (
-            latest + timedelta(days=1)
-            if latest is not None
-            else end - timedelta(days=self.config.data.backfill_days)
-        )
+        if refresh:
+            start = end - timedelta(days=self.config.data.backfill_days)
+        else:
+            latest = await self.repo.get_latest_date(symbol)
+            start = (
+                latest + timedelta(days=1)
+                if latest is not None
+                else end - timedelta(days=self.config.data.backfill_days)
+            )
         if start > end:
             written = 0
         else:

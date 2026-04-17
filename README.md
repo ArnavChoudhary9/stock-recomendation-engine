@@ -119,11 +119,12 @@ Moving averages are a primary metric, not just an internal indicator:
 
 ### Portfolio Monitoring (Kite Connect)
 
-- Live holdings and positions with real-time P&L
+- Holdings and positions with P&L (on-demand refresh via REST — no live tick feed, personal API key)
+- Last price and day P&L come directly from Kite's `/portfolio/holdings` response
 - Sector allocation breakdown with concentration warnings
 - Analysis score overlay on every holding
 - Daily portfolio snapshots with benchmark comparison (Nifty 50)
-- Alerts: score drops, signal changes, volume spikes on your holdings
+- Alerts evaluated after the daily EOD pipeline run (score drops, signal changes, volume spikes)
 
 ### Deterministic Scoring
 

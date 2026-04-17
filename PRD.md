@@ -79,7 +79,7 @@ Reliable, cached, query-efficient pipeline for Indian equity market data and fun
 
 #### Data Providers (pluggable)
 - **Primary**: Yahoo Finance (`yfinance`) — free, no API key
-- **Secondary**: Zerodha Kite Connect — for portfolio + real-time
+- **Secondary**: Zerodha Kite Connect — for portfolio holdings/positions (personal key, no live WebSocket feed)
 - **Future**: NSE direct feeds, Alpha Vantage
 
 #### Data Freshness
@@ -517,13 +517,16 @@ Deep integration with Zerodha Kite Connect for live portfolio monitoring, P&L tr
 
 #### Kite API Usage
 
+**Constraint: Personal Kite API key — no WebSocket/live tick streaming, REST-only access.**
+
 | Kite Endpoint | Our Usage | Refresh Frequency |
 | --- | --- | --- |
-| `/portfolio/holdings` | Long-term holdings + average buy price | On demand + every 5 min during market hours |
-| `/portfolio/positions` | Intraday + delivery positions, live P&L | Every 1 min during market hours |
+| `/portfolio/holdings` | Holdings, avg buy price, and LTP (Kite includes last_price in response) | On demand (manual refresh) |
+| `/portfolio/positions` | Intraday + delivery positions with P&L fields | On demand (manual refresh) |
 | `/user/margins` | Available margin, utilization | On demand |
 | `/instruments` | Symbol mapping, exchange info | Daily (cache) |
-| `/quote` | Live LTP for portfolio stocks | Every 30s during market hours (or WebSocket) |
+
+Note: `last_price` in the holdings/positions response from Kite is sufficient for P&L without needing the `/quote` endpoint. No continuous polling — user clicks "Refresh" or navigates to the portfolio page to fetch latest data.
 
 #### Session Management
 
@@ -533,11 +536,12 @@ Deep integration with Zerodha Kite Connect for live portfolio monitoring, P&L tr
 
 ### Portfolio Monitoring Features
 
-#### Real-Time P&L Dashboard
-- **Holdings P&L**: (LTP - avg_buy_price) * quantity for each holding
-- **Day P&L**: (LTP - previous_close) * quantity
-- **Positions P&L**: live intraday profit/loss
-- **Total portfolio value**: sum of all holdings at market value
+#### On-Demand P&L Dashboard
+- **Holdings P&L**: (last_price - avg_buy_price) * quantity for each holding
+- **Day P&L**: (last_price - previous_close) * quantity (from Kite holdings response)
+- **Positions P&L**: profit/loss at last fetched price (no live tick)
+- **Total portfolio value**: sum of all holdings at last fetched price
+- Data refreshes only when user clicks "Refresh" or reloads the portfolio page (no background polling)
 
 #### Portfolio Analytics
 - **Allocation breakdown**: by sector, market cap tier, and individual stock weight
@@ -621,10 +625,9 @@ class Alert(BaseModel):
 
 ```python
 class KiteClient(ABC):
-    async def get_holdings(self) -> list[Holding]
-    async def get_positions(self) -> list[Position]
+    async def get_holdings(self) -> list[Holding]      # includes last_price + day P&L
+    async def get_positions(self) -> list[Position]    # includes last_price + P&L
     async def get_margins(self) -> dict
-    async def get_quote(self, symbols: list[str]) -> dict[str, float]
     async def get_instruments(self, exchange: str) -> list[Instrument]
     def is_authenticated(self) -> bool
     def get_auth_url(self) -> str
@@ -645,8 +648,8 @@ kite:
   token_path: "data/.kite_token"    # plain file, local-only — no encryption needed
 
 monitoring:
-  poll_interval_seconds: 60         # during market hours
-  quote_interval_seconds: 30
+  # Personal Kite key — no live WebSocket feed. Data refreshes on-demand.
+  cache_ttl_seconds: 60             # dedupe rapid manual refreshes within this window
   market_hours:
     open: "09:15"
     close: "15:30"
@@ -657,7 +660,8 @@ alerts:
   score_drop_threshold: 0.3
   volume_spike_multiplier: 3.0
   sentiment_drop_threshold: -0.5
-  check_interval_minutes: 15
+  # Alerts evaluated after the daily EOD pipeline run, not continuously
+  run_after_pipeline: true
 ```
 
 ### Storage (additional tables)
@@ -939,7 +943,7 @@ This gives you:
 
 ## 10. Future Extensions
 
-- Real-time streaming via WebSockets (Kite WebSocket for live ticks)
+- Real-time streaming via Kite WebSocket (requires upgraded API subscription — not available on personal key)
 - Portfolio optimization (Markowitz, risk parity)
 - Sector rotation models
 - Options chain analysis

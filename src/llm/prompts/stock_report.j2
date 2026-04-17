@@ -1,0 +1,85 @@
+{# User prompt body for stock report generation.
+   Variables: analysis (StockAnalysis), news (NewsBundle).
+   The system message (role + JSON schema) is owned by LLMService. #}
+Symbol: {{ analysis.symbol }}
+Analysis timestamp: {{ analysis.timestamp.isoformat() }}
+Last close: Rs. {{ "%.2f"|format(analysis.features.last_close) }}
+
+## Quantitative recommendation: {{ analysis.recommendation }}
+Rationale (deterministic): {{ analysis.recommendation_rationale }}
+
+## Composite score: {{ "%.3f"|format(analysis.score) }} / 1.000
+
+### Sub-scores (each in [0, 1])
+- Moving averages: {{ "%.3f"|format(analysis.sub_scores.moving_average) }}
+- Momentum: {{ "%.3f"|format(analysis.sub_scores.momentum) }}
+- Volume: {{ "%.3f"|format(analysis.sub_scores.volume) }}
+- Volatility: {{ "%.3f"|format(analysis.sub_scores.volatility) }}
+- Fundamental: {{ "%.3f"|format(analysis.sub_scores.fundamental) }}
+- Support / resistance: {{ "%.3f"|format(analysis.sub_scores.support_resistance) }}
+
+### Moving averages
+- SMA20 / SMA50 / SMA200: {{ "%.2f"|format(analysis.moving_averages.sma_20) }} / {{ "%.2f"|format(analysis.moving_averages.sma_50) }} / {{ "%.2f"|format(analysis.moving_averages.sma_200) }}
+- Alignment: {{ analysis.moving_averages.alignment }}
+- SMA50 slope: {{ analysis.moving_averages.sma50_slope }}; SMA200 slope: {{ analysis.moving_averages.sma200_slope }}
+- Price vs SMA20 / SMA50 / SMA200: {{ "%+.2f"|format(analysis.moving_averages.price_to_sma20_pct) }}% / {{ "%+.2f"|format(analysis.moving_averages.price_to_sma50_pct) }}% / {{ "%+.2f"|format(analysis.moving_averages.price_to_sma200_pct) }}%
+{%- if analysis.moving_averages.crossover %}
+- Recent crossover: {{ analysis.moving_averages.crossover }} ({{ analysis.moving_averages.crossover_days_ago }} day(s) ago)
+{%- else %}
+- Recent crossover: none
+{%- endif %}
+
+### Momentum
+- RSI(14): {{ "%.1f"|format(analysis.features.momentum.rsi_14) }}
+- Returns: 5d {{ "%+.2f"|format(analysis.features.momentum.return_5d * 100) }}%, 10d {{ "%+.2f"|format(analysis.features.momentum.return_10d * 100) }}%, 20d {{ "%+.2f"|format(analysis.features.momentum.return_20d * 100) }}%
+
+### Volume
+- Current: {{ analysis.features.volume.current_volume }}, 20d avg: {{ "%.0f"|format(analysis.features.volume.avg_volume_20d) }}
+- Ratio (current / 20d avg): {{ "%.2f"|format(analysis.features.volume.volume_ratio) }}x
+- OBV: {{ "%.0f"|format(analysis.features.volume.obv) }}
+
+### Volatility
+- ATR(14): {{ "%.2f"|format(analysis.features.volatility.atr_14) }}
+- Std dev (20d): {{ "%.2f"|format(analysis.features.volatility.std_dev_20) }}
+
+### Support / resistance
+- 52w high: {{ "%.2f"|format(analysis.features.support_resistance.high_52w) }} ({{ "%+.2f"|format(analysis.features.support_resistance.distance_to_52w_high_pct) }}%)
+- 52w low: {{ "%.2f"|format(analysis.features.support_resistance.low_52w) }} ({{ "%+.2f"|format(analysis.features.support_resistance.distance_to_52w_low_pct) }}%)
+- Near 52w high: {{ analysis.features.support_resistance.near_52w_high }}; near 52w low: {{ analysis.features.support_resistance.near_52w_low }}
+
+### Fundamentals
+- PE: {{ analysis.features.fundamentals.pe if analysis.features.fundamentals.pe is not none else "N/A" }}
+{%- if analysis.features.fundamentals.pe_vs_sector_median is not none %}
+- PE vs sector median: {{ "%+.2f"|format(analysis.features.fundamentals.pe_vs_sector_median) }}
+{%- endif %}
+- Market cap tier: {{ analysis.features.fundamentals.market_cap_tier if analysis.features.fundamentals.market_cap_tier else "N/A" }}
+{%- if analysis.features.fundamentals.roe is not none %}
+- ROE: {{ "%.2f"|format(analysis.features.fundamentals.roe * 100) }}%
+{%- endif %}
+{%- if analysis.features.fundamentals.roe_sector_rank is not none %}
+- ROE sector percentile: {{ "%.2f"|format(analysis.features.fundamentals.roe_sector_rank) }}
+{%- endif %}
+
+### Signals
+{% for name, value in analysis.signals.items() -%}
+- {{ name }}: {{ value }}
+{% endfor %}
+### News — {{ news.article_count }} article(s) over last {{ news.time_window_hours }}h
+Aggregate sentiment: {{ "%+.3f"|format(news.aggregate_sentiment) }}
+{% if news.articles %}
+Recent headlines (sentiment label / score — URL):
+{% for article in news.articles[:10] -%}
+- [{{ article.sentiment.label }} / {{ "%+.2f"|format(article.sentiment.score) }}] {{ article.title }} — {{ article.source }} — {{ article.url }}
+{% endfor %}
+{%- else -%}
+No recent news available.
+{%- endif %}
+
+Produce the structured report now. Base every statement on the facts above.
+Do not invent numbers or URLs. Do not modify the quantitative score.
+
+In addition to the narrative fields, provide your *own* BUY/HOLD/SELL call
+(field: `recommendation`) formed by weighing the news, momentum, and context
+above. This can agree or disagree with the deterministic `{{ analysis.recommendation }}`
+call — when you disagree, state why in `recommendation_rationale` (1-2 sentences).
+Leave the `sources` array empty — the service will fill it from the article list.

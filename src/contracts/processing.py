@@ -11,6 +11,7 @@ Alignment = Literal["bullish", "bearish", "mixed"]
 Slope = Literal["rising", "falling", "flat"]
 Crossover = Literal["golden_cross", "death_cross"]
 MarketCapTier = Literal["large", "mid", "small", "micro"]
+Recommendation = Literal["BUY", "HOLD", "SELL"]
 
 
 class MovingAverages(BaseModel):
@@ -30,7 +31,7 @@ class MovingAverages(BaseModel):
     sma50_slope: Slope
     sma200_slope: Slope
     crossover: Crossover | None = None
-    crossover_days_ago: int | None = Field(None, ge=0)
+    crossover_days_ago: int | None = Field(default=None, ge=0)
 
 
 class Momentum(BaseModel):
@@ -63,12 +64,12 @@ class FundamentalFeatures(BaseModel):
 
     pe: float | None = None
     pe_vs_sector_median: float | None = Field(
-        None, description="(pe - sector_median) / sector_median; negative = cheaper than sector"
+        default=None, description="(pe - sector_median) / sector_median; negative = cheaper than sector"
     )
-    market_cap: float | None = Field(None, ge=0)
+    market_cap: float | None = Field(default=None, ge=0)
     market_cap_tier: MarketCapTier | None = None
     roe: float | None = None
-    roe_sector_rank: float | None = Field(None, ge=0, le=1, description="Percentile within sector")
+    roe_sector_rank: float | None = Field(default=None, ge=0, le=1, description="Percentile within sector")
 
 
 class SupportResistance(BaseModel):
@@ -192,6 +193,14 @@ class StockAnalysis(BaseModel):
     sub_scores: SubScores
     signals: dict[str, bool | str]
     metadata: AnalysisMetadata
+    recommendation: Recommendation = Field(
+        default="HOLD",
+        description="Deterministic BUY/HOLD/SELL derived from score + fundamentals + signals",
+    )
+    recommendation_rationale: str = Field(
+        default="",
+        description="One-line explanation of how the recommendation was derived",
+    )
 
     @field_validator("symbol")
     @classmethod

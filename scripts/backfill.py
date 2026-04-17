@@ -24,13 +24,16 @@ import argparse
 import asyncio
 import logging
 import sys
+import time
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.config import CONFIG_DIR, load_data_config
+from src.config import CONFIG_DIR, DataConfig, load_data_config
+from src.data.providers.base import DataProviderError
 from src.data.providers.yahoo import YahooFinanceProvider
 from src.data.repositories.sqlite import SQLiteStockRepository
 from src.data.service import DataService
@@ -79,6 +82,11 @@ async def main() -> int:
         "--delay-ms", type=int, default=None,
         help="Milliseconds to sleep between symbols (default: config.data.rate_limit_delay_ms)",
     )
+    parser.add_argument(
+        "--refresh", action="store_true",
+        help="Force full --days window even if the symbol already has newer data "
+             "(use to extend a previously narrow backfill).",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -110,7 +118,7 @@ async def main() -> int:
             min_interval_ms=cfg.data.rate_limit_delay_ms,
         )
         service = DataService(provider, repo, cfg)
-        results = await service.refresh_many(symbols)
+        results = await _run_backfill(service, repo, cfg, symbols, refresh=args.refresh)
     finally:
         await repo.close()
 
@@ -121,6 +129,78 @@ async def main() -> int:
     if empty:
         log.warning("no bars for: %s", ", ".join(empty))
     return 0 if ok else 1
+
+
+async def _run_backfill(
+    service: DataService,
+    repo: SQLiteStockRepository,
+    cfg: DataConfig,
+    symbols: list[str],
+    *,
+    refresh: bool = False,
+) -> dict[str, int]:
+    """Loop symbols with per-symbol progress, date range, count, and ETA."""
+    results: dict[str, int] = {}
+    today = datetime.now(UTC).date()
+    backfill_days = cfg.data.backfill_days
+    # Initial ETA: 3 throttled calls per symbol (search + ohlcv + fundamentals).
+    est_per_symbol = 3 * cfg.data.rate_limit_delay_ms / 1000.0
+    ema_per_symbol = est_per_symbol
+    total = len(symbols)
+
+    for i, sym in enumerate(symbols, 1):
+        latest_before = await repo.get_latest_date(sym)
+        if refresh:
+            start = today - timedelta(days=backfill_days)
+        else:
+            start = (
+                latest_before + timedelta(days=1)
+                if latest_before is not None
+                else today - timedelta(days=backfill_days)
+            )
+        end = today
+        remaining = total - i + 1
+        eta = remaining * ema_per_symbol
+
+        if start > end:
+            log.info(
+                "[%d/%d] %s  up-to-date (latest %s) — skipping  (ETA ~%s)",
+                i, total, sym, latest_before, _fmt_eta(eta),
+            )
+            results[sym] = 0
+            continue
+
+        log.info(
+            "[%d/%d] %s  fetching %s..%s (%d days)  (ETA ~%s)",
+            i, total, sym, start, end, (end - start).days + 1, _fmt_eta(eta),
+        )
+        t0 = time.monotonic()
+        try:
+            written = await service.refresh_symbol(sym, refresh=refresh)
+        except DataProviderError as e:
+            dt = time.monotonic() - t0
+            log.error("[%d/%d] %s  failed in %.1fs: %s", i, total, sym, dt, e)
+            results[sym] = 0
+            ema_per_symbol = 0.7 * ema_per_symbol + 0.3 * dt
+            continue
+
+        dt = time.monotonic() - t0
+        ema_per_symbol = 0.7 * ema_per_symbol + 0.3 * dt
+        results[sym] = written
+        log.info(
+            "[%d/%d] %s  ← %d bars in %.1fs",
+            i, total, sym, written, dt,
+        )
+
+    return results
+
+
+def _fmt_eta(seconds: float) -> str:
+    seconds = max(0.0, seconds)
+    if seconds < 90:
+        return f"{seconds:.0f}s"
+    m, s = divmod(int(seconds), 60)
+    return f"{m}m{s:02d}s"
 
 
 if __name__ == "__main__":

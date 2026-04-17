@@ -1,10 +1,18 @@
 news:
-  provider: "newsapi"
+  provider: "google_rss"          # google_rss (no key) | newsapi (needs key)
   time_window_hours: 72
   max_articles_per_stock: 20
   dedup_similarity_threshold: 0.85
   cache_ttl_minutes: 60
+  language: "en"
+  country: "IN"
+  request_timeout_seconds: 15.0
+  max_retries: 3
+  backoff_base_seconds: 1.0
+  # NewsAPI key is read from the NEWSAPI_KEY env var (only required if provider=newsapi).
 
 sentiment:
-  analyzer: "textblob"
+  analyzer: "textblob"            # textblob | finbert | llm
   min_text_length: 50
+  positive_threshold: 0.1
+  negative_threshold: -0.1

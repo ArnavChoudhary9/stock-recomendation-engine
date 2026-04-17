@@ -57,8 +57,9 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF"]
 # N812: date aliased to DateType to avoid shadowing Pydantic `date` fields.
-# UP046: PEP 695 generic syntax not universally supported with Pydantic v2 BaseModel yet.
-ignore = ["E501", "N812", "UP046"]
+# UP046/UP047: PEP 695 generic syntax — keep explicit TypeVar for Pydantic+mypy compatibility.
+# B008: FastAPI's Depends()/Query()/Body() idiom requires function calls in argument defaults.
+ignore = ["E501", "N812", "UP046", "UP047", "B008"]
 
 [tool.mypy]
 python_version = "3.12"

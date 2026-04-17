@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from datetime import date as DateType
 from pathlib import Path
 
-from src.contracts import Exchange, Fundamentals, OHLCVRow, StockInfo
+from src.contracts import Exchange, Fundamentals, OHLCVRow, StockInfo, WatchlistItem
 from src.data.repositories.base import RepositoryError, StockRepository
 
 log = logging.getLogger(__name__)
@@ -344,6 +344,76 @@ class SQLiteStockRepository(StockRepository):
             return datetime.fromisoformat(row["updated_at"])
 
         return await asyncio.to_thread(_q)
+
+    # ---------- Watchlist ----------
+
+    async def add_to_watchlist(
+        self, symbol: str, notes: str | None = None
+    ) -> WatchlistItem:
+        conn = self._require_conn()
+        sym = symbol.strip().upper()
+        now = datetime.now(UTC).isoformat()
+        async with self._write_lock:
+            def _w() -> WatchlistItem:
+                # INSERT OR IGNORE preserves the original added_at on re-adds.
+                conn.execute(
+                    """
+                    INSERT INTO watchlist (symbol, added_at, notes)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(symbol) DO UPDATE SET
+                        notes = COALESCE(excluded.notes, watchlist.notes)
+                    """,
+                    (sym, now, notes),
+                )
+                row = conn.execute(
+                    "SELECT symbol, added_at, notes FROM watchlist WHERE symbol = ?",
+                    (sym,),
+                ).fetchone()
+                return _row_to_watchlist_item(row)
+
+            return await asyncio.to_thread(_w)
+
+    async def remove_from_watchlist(self, symbol: str) -> bool:
+        conn = self._require_conn()
+        sym = symbol.strip().upper()
+        async with self._write_lock:
+            def _w() -> bool:
+                cur = conn.execute("DELETE FROM watchlist WHERE symbol = ?", (sym,))
+                return cur.rowcount > 0
+
+            return await asyncio.to_thread(_w)
+
+    async def list_watchlist(self) -> list[WatchlistItem]:
+        conn = self._require_conn()
+
+        def _q() -> list[WatchlistItem]:
+            cur = conn.execute(
+                "SELECT symbol, added_at, notes FROM watchlist ORDER BY added_at ASC"
+            )
+            return [_row_to_watchlist_item(r) for r in cur.fetchall()]
+
+        return await asyncio.to_thread(_q)
+
+    async def get_watchlist_item(self, symbol: str) -> WatchlistItem | None:
+        conn = self._require_conn()
+        sym = symbol.strip().upper()
+
+        def _q() -> WatchlistItem | None:
+            row = conn.execute(
+                "SELECT symbol, added_at, notes FROM watchlist WHERE symbol = ?",
+                (sym,),
+            ).fetchone()
+            return _row_to_watchlist_item(row) if row else None
+
+        return await asyncio.to_thread(_q)
+
+
+def _row_to_watchlist_item(row: sqlite3.Row) -> WatchlistItem:
+    return WatchlistItem(
+        symbol=row["symbol"],
+        added_at=datetime.fromisoformat(row["added_at"]),
+        notes=row["notes"],
+    )
 
 
 def _row_to_ohlcv(row: sqlite3.Row) -> OHLCVRow:

@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 from datetime import date as DateType
 from datetime import datetime
 
-from src.contracts import Fundamentals, OHLCVRow, StockInfo
+from src.contracts import Fundamentals, OHLCVRow, StockInfo, WatchlistItem
 
 
 class RepositoryError(Exception):
@@ -65,3 +65,21 @@ class StockRepository(ABC):
     @abstractmethod
     async def touch_symbol(self, symbol: str) -> None:
         """Bump ``stocks.updated_at`` to now — records a fetch attempt."""
+
+    # ---------- Watchlist ----------
+
+    @abstractmethod
+    async def add_to_watchlist(self, symbol: str, notes: str | None = None) -> WatchlistItem:
+        """Add ``symbol`` to the watchlist. No-op if already present (returns existing)."""
+
+    @abstractmethod
+    async def remove_from_watchlist(self, symbol: str) -> bool:
+        """Remove ``symbol`` from the watchlist. Returns True if an entry was removed."""
+
+    @abstractmethod
+    async def list_watchlist(self) -> list[WatchlistItem]:
+        """Return every watchlist entry, ordered by ``added_at`` ascending."""
+
+    @abstractmethod
+    async def get_watchlist_item(self, symbol: str) -> WatchlistItem | None:
+        """Return the watchlist entry for ``symbol``, or ``None`` if not watched."""

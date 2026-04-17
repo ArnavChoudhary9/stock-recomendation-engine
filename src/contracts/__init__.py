@@ -22,7 +22,7 @@ from src.contracts.data import (
     OHLCVRow,
     StockInfo,
 )
-from src.contracts.llm import StockReport
+from src.contracts.llm import NewsReference, StockReport
 from src.contracts.news import (
     Article,
     NewsBundle,
@@ -50,6 +50,7 @@ from src.contracts.processing import (
     MarketCapTier,
     Momentum,
     MovingAverages,
+    Recommendation,
     ScoringConfig,
     ScoringWeights,
     SignalThresholds,
@@ -60,11 +61,13 @@ from src.contracts.processing import (
     Volatility,
     VolumeFeatures,
 )
+from src.contracts.watchlist import AddToWatchlistRequest, WatchlistItem
 
 __all__ = [
     "API_VERSION",
     "APIError",
     "APIResponse",
+    "AddToWatchlistRequest",
     "Alert",
     "AlertRule",
     "AlertType",
@@ -85,6 +88,7 @@ __all__ = [
     "Momentum",
     "MovingAverages",
     "NewsBundle",
+    "NewsReference",
     "OHLCVRow",
     "PaginatedResponse",
     "PaginationMeta",
@@ -93,6 +97,7 @@ __all__ = [
     "Position",
     "Product",
     "RawArticle",
+    "Recommendation",
     "ResponseMeta",
     "ScoringConfig",
     "ScoringWeights",
@@ -107,4 +112,5 @@ __all__ = [
     "SupportResistance",
     "Volatility",
     "VolumeFeatures",
+    "WatchlistItem",
 ]

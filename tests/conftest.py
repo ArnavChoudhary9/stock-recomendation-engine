@@ -8,11 +8,16 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
+from dotenv import load_dotenv
 
-from src.config import DataConfig, DataProviderConfig, StorageConfig
-from src.contracts import Fundamentals, OHLCVRow, StockInfo
-from src.data.providers.base import DataProvider
-from src.data.repositories.sqlite import SQLiteStockRepository
+# Load .env at collection time so tests that read env vars (e.g. NEWSAPI_KEY)
+# pick them up without requiring the user to export them per-shell.
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+
+from src.config import DataConfig, DataProviderConfig, StorageConfig  # noqa: E402
+from src.contracts import Fundamentals, OHLCVRow, StockInfo  # noqa: E402
+from src.data.providers.base import DataProvider  # noqa: E402
+from src.data.repositories.sqlite import SQLiteStockRepository  # noqa: E402
 
 
 class FakeProvider(DataProvider):
